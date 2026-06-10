@@ -33,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await auth.logout();
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     }
   }

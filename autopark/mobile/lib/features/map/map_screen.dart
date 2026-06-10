@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import '../../core/api_service.dart';
 import '../../core/constants.dart';
 
@@ -12,8 +13,9 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   List<dynamic> _parkings = [];
-  Set<Marker> _markers = {};
+  List<Marker> _markers = [];
   dynamic _selectedParking;
+  final MapController _mapController = MapController();
 
   @override
   void initState() {
@@ -24,6 +26,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadParkings() async {
     try {
       final data = await ApiService.get('/parkings');
+      if (!mounted) return;
       setState(() {
         _parkings = List.from(data);
         _markers = _parkings
@@ -31,15 +34,23 @@ class _MapScreenState extends State<MapScreen> {
             .map((p) {
           final coords = p['location']['coordinates'];
           return Marker(
-            markerId: MarkerId(p['_id']),
-            position: LatLng(coords[1].toDouble(), coords[0].toDouble()),
-            infoWindow: InfoWindow(
-              title: p['name'],
-              snippet: '${p['availableSpots']} places disponibles',
+            point: LatLng(coords[1].toDouble(), coords[0].toDouble()),
+            width: 40,
+            height: 40,
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedParking = p),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4)],
+                ),
+                child: const Icon(Icons.local_parking, color: Colors.white, size: 20),
+              ),
             ),
-            onTap: () => setState(() => _selectedParking = p),
           );
-        }).toSet();
+        }).toList();
       });
     } catch (e) {
       debugPrint('Error loading parkings: $e');
@@ -51,17 +62,20 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: const CameraPosition(
-              target: LatLng(ApiConfig.defaultLat, ApiConfig.defaultLng),
-              zoom: ApiConfig.defaultZoom,
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: const LatLng(ApiConfig.defaultLat, ApiConfig.defaultLng),
+              initialZoom: ApiConfig.defaultZoom,
+              onTap: (_, __) => setState(() => _selectedParking = null),
             ),
-            markers: _markers,
-            onMapCreated: (controller) {},
-            myLocationEnabled: true,
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-            mapToolbarEnabled: false,
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.autopark.mobile',
+              ),
+              MarkerLayer(markers: _markers),
+            ],
           ),
 
           // Search bar

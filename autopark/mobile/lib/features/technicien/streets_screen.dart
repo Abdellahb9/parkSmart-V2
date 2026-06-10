@@ -46,7 +46,7 @@ class _StreetsScreenState extends State<StreetsScreen> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Émettre une amende'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -57,9 +57,9 @@ class _StreetsScreenState extends State<StreetsScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Annuler')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
             child: const Text('Émettre l\'amende'),
           ),
@@ -197,7 +197,7 @@ class _StreetsScreenState extends State<StreetsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(booking['carPlate'], style: const TextStyle(fontWeight: FontWeight.w700)),
-                                  Text('Réservé', style: const TextStyle(fontSize: 12, color: AppColors.success)),
+                                  const Text('Réservé', style: TextStyle(fontSize: 12, color: AppColors.success)),
                                 ],
                               )
                             : const Text('VIDE', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
