@@ -1,31 +1,29 @@
-const mongoose = require('mongoose');
 const Booking = require('../models/Booking');
 const Parking = require('../models/Parking');
 const LoyaltyPoints = require('../models/LoyaltyPoints');
 
 // POST /api/bookings — user only, atomic spot reservation
 exports.create = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const { parkingId, spotNumber, carPlate, startTime, endTime } = req.body;
 
-    // Find parking and check spot availability atomically
+    // Atomically reserve the spot only if it is currently available.
+    // $elemMatch ensures both conditions match the SAME spot, so the
+    // positional `$` below updates exactly that spot. This conditional
+    // update is what prevents double-booking — no transaction needed
+    // (and standalone MongoDB doesn't support them anyway).
     const parking = await Parking.findOneAndUpdate(
       {
         _id: parkingId,
-        'spots.spotNumber': spotNumber,
-        'spots.status': 'available',
+        spots: { $elemMatch: { spotNumber, status: 'available' } },
       },
       {
         $set: { 'spots.$.status': 'reserved' },
       },
-      { new: true, session }
+      { new: true }
     );
 
     if (!parking) {
-      await session.abortTransaction();
       return res.status(400).json({ message: 'Spot is not available or parking not found' });
     }
 
@@ -36,26 +34,31 @@ exports.create = async (req, res) => {
     const totalHours = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60)));
     const totalPrice = totalHours * parking.pricePerHour;
 
-    const booking = await Booking.create([{
-      userId: req.user._id,
-      parkingId,
-      spotNumber,
-      carPlate,
-      startTime: start,
-      endTime: end,
-      totalHours,
-      totalPrice,
-      status: 'active',
-    }], { session });
+    let booking;
+    try {
+      booking = await Booking.create({
+        userId: req.user._id,
+        parkingId,
+        spotNumber,
+        carPlate,
+        startTime: start,
+        endTime: end,
+        totalHours,
+        totalPrice,
+        status: 'active',
+      });
+    } catch (err) {
+      // Roll back the spot reservation if creating the booking fails
+      await Parking.updateOne(
+        { _id: parkingId, 'spots.spotNumber': spotNumber },
+        { $set: { 'spots.$.status': 'available' } }
+      );
+      throw err;
+    }
 
-    await session.commitTransaction();
-
-    res.status(201).json(booking[0]);
+    res.status(201).json(booking);
   } catch (error) {
-    await session.abortTransaction();
     res.status(500).json({ message: 'Server error', error: error.message });
-  } finally {
-    session.endSession();
   }
 };
 
@@ -78,19 +81,14 @@ exports.getById = async (req, res) => {
 
 // PATCH /api/bookings/:id/cancel — cancellation with fee logic
 exports.cancel = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const booking = await Booking.findById(req.params.id).session(session);
+    const booking = await Booking.findById(req.params.id);
 
     if (!booking) {
-      await session.abortTransaction();
       return res.status(404).json({ message: 'Booking not found' });
     }
 
     if (booking.status === 'cancelled' || booking.status === 'done') {
-      await session.abortTransaction();
       return res.status(400).json({ message: 'Booking already completed or cancelled' });
     }
 
@@ -102,16 +100,13 @@ exports.cancel = async (req, res) => {
 
     booking.status = 'cancelled';
     booking.cancellationFee = cancellationFee;
-    await booking.save({ session });
+    await booking.save();
 
     // Release the spot
     await Parking.findOneAndUpdate(
       { _id: booking.parkingId, 'spots.spotNumber': booking.spotNumber },
-      { $set: { 'spots.$.status': 'available' } },
-      { session }
+      { $set: { 'spots.$.status': 'available' } }
     );
-
-    await session.commitTransaction();
 
     res.json({
       message: 'Booking cancelled',
@@ -119,10 +114,7 @@ exports.cancel = async (req, res) => {
       booking,
     });
   } catch (error) {
-    await session.abortTransaction();
     res.status(500).json({ message: 'Server error', error: error.message });
-  } finally {
-    session.endSession();
   }
 };
 
@@ -141,40 +133,30 @@ exports.getUserReservations = async (req, res) => {
 
 // POST /api/bookings/:id/complete — mark booking as done (called by system or owner)
 exports.complete = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
-    const booking = await Booking.findById(req.params.id).session(session);
+    const booking = await Booking.findById(req.params.id);
     if (!booking || booking.status !== 'active') {
-      await session.abortTransaction();
       return res.status(400).json({ message: 'Booking not found or not active' });
     }
 
     booking.status = 'done';
-    await booking.save({ session });
+    await booking.save();
 
     // Release spot
     await Parking.findOneAndUpdate(
       { _id: booking.parkingId, 'spots.spotNumber': booking.spotNumber },
-      { $set: { 'spots.$.status': 'available' } },
-      { session }
+      { $set: { 'spots.$.status': 'available' } }
     );
 
     // Increment loyalty points
     await LoyaltyPoints.findOneAndUpdate(
       { userId: booking.userId, parkingId: booking.parkingId },
       { $inc: { bookingCount: 1 } },
-      { upsert: true, session }
+      { upsert: true }
     );
-
-    await session.commitTransaction();
 
     res.json({ message: 'Booking completed', booking });
   } catch (error) {
-    await session.abortTransaction();
     res.status(500).json({ message: 'Server error', error: error.message });
-  } finally {
-    session.endSession();
   }
 };

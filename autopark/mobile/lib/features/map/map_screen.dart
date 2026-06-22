@@ -29,10 +29,9 @@ class _MapScreenState extends State<MapScreen> {
       if (!mounted) return;
       setState(() {
         _parkings = List.from(data);
-        _markers = _parkings
-            .where((p) => p['type'] == 'normal')
-            .map((p) {
+        _markers = _parkings.map((p) {
           final coords = p['location']['coordinates'];
+          final isStreet = p['type'] == 'open_street';
           return Marker(
             point: LatLng(coords[1].toDouble(), coords[0].toDouble()),
             width: 40,
@@ -41,12 +40,16 @@ class _MapScreenState extends State<MapScreen> {
               onTap: () => setState(() => _selectedParking = p),
               child: Container(
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: isStreet ? AppColors.warning : AppColors.primary,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4)],
                 ),
-                child: const Icon(Icons.local_parking, color: Colors.white, size: 20),
+                child: Icon(
+                  isStreet ? Icons.add_road : Icons.local_parking,
+                  color: Colors.white,
+                  size: 20,
+                ),
               ),
             ),
           );
@@ -133,6 +136,8 @@ class _MapScreenState extends State<MapScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
+                    _typeBadge(_selectedParking['type'] == 'open_street'),
+                    const SizedBox(height: 8),
                     Text(_selectedParking['address'] ?? '', style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
                     const SizedBox(height: 12),
                     Row(
@@ -155,6 +160,21 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _typeBadge(bool isStreet) {
+    final color = isStreet ? AppColors.warning : AppColors.primary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        isStreet ? 'Voie publique' : 'Parking normal',
+        style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
       ),
     );
   }
