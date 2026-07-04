@@ -16,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   Future<void> _handleLogin() async {
+    if (!mounted) return;
     setState(() => _error = null);
     try {
       final auth = context.read<AuthProvider>();
@@ -29,6 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (user['role'] == 'user') {
         context.go('/map');
       } else {
+        if (!mounted) return;
         setState(() => _error = 'Ce compte ne peut pas accéder à l\'application mobile');
         await auth.logout();
       }

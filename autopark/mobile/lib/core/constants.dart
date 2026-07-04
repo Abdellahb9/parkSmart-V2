@@ -18,8 +18,9 @@ class AppColors {
 
 class ApiConfig {
   // Change this to your backend URL
-  // For Android emulator use 10.0.2.2, for iOS simulator use localhost
-  static const String baseUrl = 'http://10.0.2.2:5000/api';
+  // For Android device on same WiFi use your computer's IP address
+  // For Android emulator use 10.0.2.2, for iOS simulator/Chrome use localhost
+  static const String baseUrl = 'http://10.68.198.165:5000/api';
 
   // Laayoune coordinates
   static const double defaultLat = 27.1536;

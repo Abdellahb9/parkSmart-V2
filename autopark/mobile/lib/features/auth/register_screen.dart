@@ -18,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _error;
 
   Future<void> _handleRegister() async {
+    if (!mounted) return;
     setState(() => _error = null);
     try {
       final auth = context.read<AuthProvider>();
@@ -30,6 +31,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
       context.go('/map');
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     }
   }
