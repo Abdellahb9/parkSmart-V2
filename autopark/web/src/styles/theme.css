@@ -1,0 +1,171 @@
+/* GENERATED FILE — do not edit by hand.
+   Source: design/tokens/*.json   Regenerate: node design/build-tokens.mjs */
+@theme {
+  /* Color (light) */
+  --color-primary: #0F2A4A;
+  --color-primary-hover: #0A1C33;
+  --color-primary-soft: #F2F6FB;
+  --color-on-primary: #FFFFFF;
+  --color-accent: #C8961E;
+  --color-accent-soft: #FDF8EC;
+  --color-on-accent: #0F172A;
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-text: #0F172A;
+  --color-text-muted: #64748B;
+  --color-text-inverse: #FFFFFF;
+  --color-success: #059669;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-danger-hover: #B91C1C;
+  --color-focus: #6B93C2;
+  --color-parking-normal: #4571A6;
+  --color-parking-street: #C8961E;
+  --color-spot-free: #047857;
+  --color-spot-free-bg: #ECFDF5;
+  --color-spot-reserved: #B45309;
+  --color-spot-reserved-bg: #FFFBEB;
+  --color-spot-occupied: #B91C1C;
+  --color-spot-occupied-bg: #FEF2F2;
+  --color-spot-overstay: #991B1B;
+  --color-spot-overstay-bg: #FEE2E2;
+  --color-spot-blocked: #475569;
+  --color-spot-blocked-bg: #F1F5F9;
+
+  /* Spacing: 4px base, so p-4 = 16px */
+  --spacing: 4px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Type */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --leading-tight: 1.2;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-arabic: 'IBM Plex Sans Arabic', 'Cairo', 'Noto Naskh Arabic', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+
+  /* Elevation (light) */
+  --shadow-1: 0 1px 2px rgba(15,42,74,0.06), 0 1px 3px rgba(15,42,74,0.08);
+  --shadow-2: 0 2px 4px rgba(15,42,74,0.06), 0 4px 12px rgba(15,42,74,0.08);
+  --shadow-3: 0 8px 24px rgba(15,42,74,0.10);
+}
+
+/* Raw spacing scale, for hand-written CSS that is not a Tailwind utility. */
+:root {
+  --ap-space-0: 0px;
+  --ap-space-1: 4px;
+  --ap-space-2: 8px;
+  --ap-space-3: 12px;
+  --ap-space-4: 16px;
+  --ap-space-5: 20px;
+  --ap-space-6: 24px;
+  --ap-space-8: 32px;
+  --ap-space-10: 40px;
+  --ap-space-12: 48px;
+  --ap-space-16: 64px;
+  color-scheme: light;
+}
+
+/* Dark theme. Tailwind utilities read these same custom properties, so
+   overriding them here re-themes every utility with no component changes. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-primary: #2B5586;
+  --color-primary-hover: #4571A6;
+  --color-primary-soft: #0A1C33;
+  --color-on-primary: #FFFFFF;
+  --color-accent: #E3AC33;
+  --color-accent-soft: #583C17;
+  --color-on-accent: #0F172A;
+  --color-bg: #080F1C;
+  --color-surface: #0F172A;
+  --color-surface-alt: #1E293B;
+  --color-border: #334155;
+  --color-border-strong: #475569;
+  --color-text: #F8FAFC;
+  --color-text-muted: #94A3B8;
+  --color-text-inverse: #0F172A;
+  --color-success: #6EE7B7;
+  --color-warning: #FCD34D;
+  --color-danger: #FCA5A5;
+  --color-danger-hover: #FECACA;
+  --color-focus: #98B7DA;
+  --color-parking-normal: #98B7DA;
+  --color-parking-street: #E3AC33;
+  --color-spot-free: #6EE7B7;
+  --color-spot-free-bg: #06301F;
+  --color-spot-reserved: #FCD34D;
+  --color-spot-reserved-bg: #3A2A06;
+  --color-spot-occupied: #FCA5A5;
+  --color-spot-occupied-bg: #3A1212;
+  --color-spot-overstay: #FECACA;
+  --color-spot-overstay-bg: #4A1414;
+  --color-spot-blocked: #CBD5E1;
+  --color-spot-blocked-bg: #1E293B;
+  --shadow-1: 0 1px 3px rgba(0,0,0,0.5);
+  --shadow-2: 0 2px 10px rgba(0,0,0,0.55);
+  --shadow-3: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-primary: #2B5586;
+    --color-primary-hover: #4571A6;
+    --color-primary-soft: #0A1C33;
+    --color-on-primary: #FFFFFF;
+    --color-accent: #E3AC33;
+    --color-accent-soft: #583C17;
+    --color-on-accent: #0F172A;
+    --color-bg: #080F1C;
+    --color-surface: #0F172A;
+    --color-surface-alt: #1E293B;
+    --color-border: #334155;
+    --color-border-strong: #475569;
+    --color-text: #F8FAFC;
+    --color-text-muted: #94A3B8;
+    --color-text-inverse: #0F172A;
+    --color-success: #6EE7B7;
+    --color-warning: #FCD34D;
+    --color-danger: #FCA5A5;
+    --color-danger-hover: #FECACA;
+    --color-focus: #98B7DA;
+    --color-parking-normal: #98B7DA;
+    --color-parking-street: #E3AC33;
+    --color-spot-free: #6EE7B7;
+    --color-spot-free-bg: #06301F;
+    --color-spot-reserved: #FCD34D;
+    --color-spot-reserved-bg: #3A2A06;
+    --color-spot-occupied: #FCA5A5;
+    --color-spot-occupied-bg: #3A1212;
+    --color-spot-overstay: #FECACA;
+    --color-spot-overstay-bg: #4A1414;
+    --color-spot-blocked: #CBD5E1;
+    --color-spot-blocked-bg: #1E293B;
+    --shadow-1: 0 1px 3px rgba(0,0,0,0.5);
+    --shadow-2: 0 2px 10px rgba(0,0,0,0.55);
+    --shadow-3: 0 10px 30px rgba(0,0,0,0.6);
+  }
+}

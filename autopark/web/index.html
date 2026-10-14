@@ -6,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="AutoPark - Système de gestion de parking intelligent pour Laâyoune" />
     <title>AutoPark — Parking Intelligent</title>
+    <script>
+      // Apply the saved theme and language before first paint, so neither the
+      // colours nor the reading direction flash on load.
+      try {
+        var t = localStorage.getItem('autopark_theme');
+        if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+        if (localStorage.getItem('autopark_lang') === 'ar') {
+          document.documentElement.lang = 'ar';
+          document.documentElement.dir = 'rtl';
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

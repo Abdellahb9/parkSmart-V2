@@ -1,90 +1,120 @@
-import { useState, useEffect } from 'react';
-import api from '../../api';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { TriangleAlert } from 'lucide-react';
+import { Badge, DataTable, Tabs } from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
+import { useAsync } from '../../hooks/useAsync';
+import { useNow } from '../../hooks/useNow';
+import { ownerService } from '../../services';
+import CheckInAction from '../common/CheckInAction';
+import { fmtDateTime, fmtDuration, fmtMAD, fmtNumber } from '../../lib/format';
 
-export default function ReservationsPage() {
-  const [data, setData] = useState({ active: [], completed: [], overtime: [] });
-  const [loading, setLoading] = useState(true);
+/** Time left, or time overrun, recomputed every second from the page clock. */
+function Countdown({ endTime, now }) {
+  if (!endTime) return <span className="text-text-muted">—</span>;
+  const diffMin = Math.floor((new Date(endTime).getTime() - now) / 60000);
+
+  if (diffMin < 0) {
+    return (
+      <Badge tone="overstay" icon={TriangleAlert}>
+        {`+${fmtDuration(-diffMin)}`}
+      </Badge>
+    );
+  }
+  return <Badge tone={diffMin <= 15 ? 'reserved' : 'free'}>{fmtDuration(diffMin)}</Badge>;
+}
+
+export default function OwnerReservationsPage() {
+  const { t } = useTranslation();
+  const { data, loading, error, reload } = useAsync(() => ownerService.reservations(), []);
+  const now = useNow(1000);
   const [tab, setTab] = useState('active');
 
-  useEffect(() => {
-    api.get('/owner/reservations')
-      .then(({ data }) => setData(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const { active, completed, overtime } = data ?? { active: [], completed: [], overtime: [] };
 
-  const formatDate = (d) => new Date(d).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+  const rows = useMemo(() => {
+    if (tab === 'completed') return completed;
+    if (tab === 'overtime') return overtime;
+    return active;
+  }, [tab, active, completed, overtime]);
 
-  const renderTable = (bookings, showOvertime = false) => (
-    <table className="data-table">
-      <thead>
-        <tr>
-          <th>Client</th>
-          <th>Plaque</th>
-          <th>Heures</th>
-          <th>Email</th>
-          <th>Téléphone</th>
-          <th>Début</th>
-          <th>Fin</th>
-          {showOvertime && <th>Dépassement</th>}
-        </tr>
-      </thead>
-      <tbody>
-        {bookings.map((b) => {
-          const overtime = showOvertime ? Math.max(0, Math.round((Date.now() - new Date(b.endTime)) / (1000 * 60))) : 0;
-          return (
-            <tr key={b._id}>
-              <td style={{ fontWeight: '500' }}>{b.userId?.fullName || 'N/A'}</td>
-              <td><span className="badge badge-primary">{b.carPlate}</span></td>
-              <td>{b.totalHours}h</td>
-              <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{b.userId?.email || 'N/A'}</td>
-              <td style={{ fontSize: '13px' }}>{b.userId?.phone || 'N/A'}</td>
-              <td style={{ fontSize: '13px' }}>{formatDate(b.startTime)}</td>
-              <td style={{ fontSize: '13px' }}>{formatDate(b.endTime)}</td>
-              {showOvertime && (
-                <td>
-                  <span className="badge badge-danger">{overtime} min</span>
-                </td>
-              )}
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  );
+  const base = [
+    { key: 'client', header: t('columns.client'), value: (b) => b.userId?.fullName ?? '', render: (b) => b.userId?.fullName ?? '—' },
+    { key: 'parking', header: t('columns.parking'), value: (b) => b.parkingId?.name ?? '', render: (b) => b.parkingId?.name ?? '—' },
+    { key: 'spotNumber', header: t('columns.spot'), align: 'end', render: (b) => t('common.spotNo', { n: b.spotNumber }) },
+    { key: 'carPlate', header: t('columns.plate'), render: (b) => <bdi>{b.carPlate}</bdi> },
+    { key: 'startTime', header: t('columns.start'), render: (b) => fmtDateTime(b.startTime) },
+    { key: 'endTime', header: t('columns.end'), render: (b) => fmtDateTime(b.endTime) },
+  ];
+
+  const columns =
+    tab === 'completed'
+      ? [
+          ...base,
+          { key: 'totalHours', header: t('columns.duration'), align: 'end', render: (b) => t('common.hours', { n: fmtNumber(b.totalHours) }) },
+          { key: 'totalPrice', header: t('columns.amount'), align: 'end', render: (b) => fmtMAD(b.totalPrice) },
+        ]
+      : [
+          ...base,
+          {
+            key: 'remaining',
+            header: tab === 'overtime' ? t('columns.overrun') : t('columns.remaining'),
+            align: 'end',
+            sortable: false,
+            render: (b) => <Countdown endTime={b.endTime} now={now} />,
+          },
+          { key: 'totalPrice', header: t('columns.amount'), align: 'end', render: (b) => fmtMAD(b.totalPrice) },
+          {
+            key: 'checkin',
+            header: t('columns.checkin'),
+            align: 'end',
+            sortable: false,
+            exportable: false,
+            render: (b) => <CheckInAction booking={b} onDone={reload} />,
+          },
+        ];
+
+  const tabs = [
+    { id: 'active', label: t('reservations.tabs.active'), badge: active.length },
+    { id: 'completed', label: t('reservations.tabs.completed'), badge: completed.length },
+    { id: 'overtime', label: t('reservations.tabs.overtime'), badge: overtime.length },
+  ];
+
+  const emptyByTab = {
+    active: { title: t('reservations.empty.active'), description: t('reservations.empty.activeHint') },
+    completed: { title: t('reservations.empty.completed'), description: undefined },
+    overtime: { title: t('reservations.empty.overtime'), description: t('reservations.empty.overtimeHint') },
+  };
 
   return (
-    <div>
-      <div className="page-header">
-        <h1>Réservations</h1>
-        <p>Suivi des réservations actives et historique</p>
-      </div>
+    <>
+      <PageHeader
+        title={t('reservations.title')}
+        description={t('reservations.ownerDescription')}
+        actions={
+          overtime.length > 0 ? (
+            <Badge tone="overstay" icon={TriangleAlert}>
+              {t('reservations.overstayBadge', { count: overtime.length, n: fmtNumber(overtime.length) })}
+            </Badge>
+          ) : null
+        }
+      />
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <button className={`btn ${tab === 'active' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setTab('active')}>
-          Actives ({data.active.length})
-        </button>
-        <button className={`btn ${tab === 'completed' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setTab('completed')}>
-          Terminées ({data.completed.length})
-        </button>
-        <button className={`btn ${tab === 'overtime' ? 'btn-danger' : 'btn-outline'}`} onClick={() => setTab('overtime')}>
-          ⚠️ Dépassements ({data.overtime.length})
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="card-body" style={{ padding: 0 }}>
-          {loading ? (
-            <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Chargement...</p>
-          ) : tab === 'active' ? (
-            data.active.length > 0 ? renderTable(data.active) : <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Aucune réservation active</p>
-          ) : tab === 'completed' ? (
-            data.completed.length > 0 ? renderTable(data.completed) : <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Aucune réservation terminée</p>
-          ) : (
-            data.overtime.length > 0 ? renderTable(data.overtime, true) : <p style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)' }}>Aucun dépassement</p>
-          )}
-        </div>
-      </div>
-    </div>
+      <Tabs items={tabs} value={tab} onChange={setTab}>
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          error={error}
+          onRetry={reload}
+          pageSize={10}
+          csvFileName={`reservations-${tab}.csv`}
+          caption={t('reservations.caption')}
+          searchPlaceholder={t('reservations.searchPlaceholder')}
+          emptyTitle={emptyByTab[tab].title}
+          emptyDescription={emptyByTab[tab].description}
+        />
+      </Tabs>
+    </>
   );
 }

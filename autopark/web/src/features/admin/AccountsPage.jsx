@@ -1,148 +1,246 @@
-import { useState, useEffect } from 'react';
-import api from '../../api';
+import { useMemo, useState } from 'react';
+import { UserCheck, UserPlus, UserX } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Badge, Button, DataTable, Drawer, Input, Modal, Select, useToast } from '../../components/ui';
+import useAuthStore from '../../store/authStore';
+import { PageHeader } from '../../layouts/AppShell';
+import { useAsync } from '../../hooks/useAsync';
+import { adminService, errorMessage } from '../../services';
+import { fmtDate } from '../../lib/format';
+import { roleLabel } from '../../layouts/navConfig';
 
-export default function AccountsPage() {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', phone: '', CNE: '', role: 'parking_owner' });
+const ROLE_TONES = { admin: 'danger', parking_owner: 'primary', technicien: 'warning', user: 'success' };
+const EMPTY = { fullName: '', CNE: '', email: '', phone: '', password: '', role: 'parking_owner' };
+
+export default function AdminAccountsPage() {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const users = useAsync(() => adminService.users(), []);
+
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY);
+  const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
+  // The account whose status is about to change, pending confirmation.
+  const [pending, setPending] = useState(null);
+  const [toggling, setToggling] = useState(false);
+  const me = useAuthStore((s) => s.user);
 
-  const fetchUsers = async () => {
-    try {
-      const { data } = await api.get('/admin/users');
-      setUsers(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const rows = useMemo(() => {
+    const list = users.data ?? [];
+    return roleFilter === 'all' ? list : list.filter((u) => u.role === roleFilter);
+  }, [users.data, roleFilter]);
+
+  const validate = () => {
+    const next = {};
+    if (!form.fullName.trim()) next.fullName = t('accounts.errors.name');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) next.email = t('accounts.errors.email');
+    if (form.password.length < 6) next.password = t('accounts.errors.password');
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
-  useEffect(() => { fetchUsers(); }, []);
-
-  const filteredUsers = filter === 'all' ? users : users.filter(u => u.role === filter);
-
-  const handleSubmit = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
+    if (!validate()) return;
     setSaving(true);
-    setMessage(null);
     try {
-      await api.post('/admin/users', form);
-      setMessage({ type: 'success', text: 'Compte créé avec succès!' });
-      setForm({ fullName: '', email: '', password: '', phone: '', CNE: '', role: 'parking_owner' });
-      fetchUsers();
+      await adminService.createUser({
+        fullName: form.fullName.trim(),
+        CNE: form.CNE.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim(),
+        password: form.password,
+        role: form.role,
+      });
+      toast.success(t('accounts.createdToast'), { description: `${form.fullName.trim()} · ${roleLabel(t, form.role)}` });
+      setForm(EMPTY);
+      setErrors({});
+      setOpen(false);
+      users.reload();
     } catch (err) {
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Erreur de création' });
+      toast.error(t('accounts.createFailed'), { description: errorMessage(err) });
     } finally {
       setSaving(false);
     }
   };
 
-  const roleLabels = { admin: 'Admin', parking_owner: 'Propriétaire', technicien: 'Technicien', user: 'Utilisateur' };
-  const roleBadge = { admin: 'badge-danger', parking_owner: 'badge-primary', technicien: 'badge-warning', user: 'badge-success' };
+  const toggleStatus = async () => {
+    if (!pending) return;
+    const enable = pending.isActive === false;
+    setToggling(true);
+    try {
+      await adminService.setUserStatus(pending._id, enable);
+      toast.success(enable ? t('accounts.status.enabledToast') : t('accounts.status.disabledToast'), {
+        description: pending.fullName,
+      });
+      setPending(null);
+      users.reload();
+    } catch (err) {
+      toast.error(t('accounts.status.failed'), { description: errorMessage(err) });
+    } finally {
+      setToggling(false);
+    }
+  };
+
+  const columns = [
+    { key: 'fullName', header: t('accounts.col.name') },
+    { key: 'email', header: t('accounts.col.email') },
+    { key: 'phone', header: t('accounts.col.phone'), render: (u) => u.phone || '—' },
+    { key: 'CNE', header: t('accounts.col.cne'), render: (u) => u.CNE || '—' },
+    {
+      key: 'role',
+      header: t('accounts.col.role'),
+      value: (u) => roleLabel(t, u.role),
+      render: (u) => <Badge tone={ROLE_TONES[u.role] ?? 'neutral'}>{roleLabel(t, u.role)}</Badge>,
+    },
+    {
+      key: 'isActive',
+      header: t('accounts.col.status'),
+      value: (u) => (u.isActive === false ? t('accounts.status.disabled') : t('accounts.status.active')),
+      render: (u) => (
+        <Badge tone={u.isActive === false ? 'danger' : 'success'} dot>
+          {u.isActive === false ? t('accounts.status.disabled') : t('accounts.status.active')}
+        </Badge>
+      ),
+    },
+    { key: 'createdAt', header: t('accounts.col.createdAt'), align: 'end', render: (u) => fmtDate(u.createdAt) },
+    {
+      key: 'actions',
+      header: t('accounts.col.actions'),
+      sortable: false,
+      exportable: false,
+      align: 'end',
+      render: (u) =>
+        // Nobody can lock themselves out of the console.
+        String(u._id) === String(me?._id) ? null : (
+          <Button size="sm" variant={u.isActive === false ? 'secondary' : 'ghost'} onClick={() => setPending(u)}>
+            {u.isActive === false ? (
+              <UserCheck aria-hidden="true" className="size-4" />
+            ) : (
+              <UserX aria-hidden="true" className="size-4 text-danger" />
+            )}
+            {u.isActive === false ? t('accounts.status.enable') : t('accounts.status.disable')}
+          </Button>
+        ),
+    },
+  ];
 
   return (
-    <div>
-      <div className="page-header">
-        <h1>Gestion des comptes</h1>
-        <p>Créer et gérer les comptes propriétaires et techniciens</p>
-      </div>
+    <>
+      <PageHeader
+        title={t('accounts.title')}
+        description={t('accounts.description')}
+        actions={
+          <Button onClick={() => setOpen(true)}>
+            <UserPlus aria-hidden="true" className="size-4" />
+            {t('accounts.create')}
+          </Button>
+        }
+      />
 
-      <div className="two-panel sidebar-list">
-        {/* Left: Users list */}
-        <div className="card">
-          <div className="card-body">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '16px', fontWeight: '600' }}>Tous les comptes ({filteredUsers.length})</h3>
-              <select
-                className="form-select"
-                style={{ width: 'auto' }}
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              >
-                <option value="all">Tous</option>
-                <option value="admin">Admin</option>
-                <option value="parking_owner">Propriétaire</option>
-                <option value="technicien">Technicien</option>
-                <option value="user">Utilisateur</option>
-              </select>
-            </div>
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={users.loading}
+        error={users.error}
+        onRetry={users.reload}
+        csvFileName="comptes-autopark.csv"
+        caption={t('accounts.caption')}
+        searchPlaceholder={t('accounts.searchPlaceholder')}
+        emptyTitle={t('accounts.emptyTitle')}
+        toolbar={
+          <Select
+            label={t('accounts.role')}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="w-48"
+          >
+            <option value="all">{t('accounts.allRoles')}</option>
+            <option value="admin">{t('accounts.filter.admin')}</option>
+            <option value="parking_owner">{t('accounts.filter.parking_owner')}</option>
+            <option value="technicien">{t('accounts.filter.technicien')}</option>
+            <option value="user">{t('accounts.filter.user')}</option>
+          </Select>
+        }
+      />
 
-            {loading ? (
-              <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '20px' }}>Chargement...</p>
-            ) : (
-              <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Nom</th>
-                      <th>Email</th>
-                      <th>Rôle</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((u) => (
-                      <tr key={u._id}>
-                        <td style={{ fontWeight: '500' }}>{u.fullName}</td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>{u.email}</td>
-                        <td><span className={`badge ${roleBadge[u.role]}`}>{roleLabels[u.role]}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title={t('accounts.create')}
+        description={t('accounts.drawerHint')}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button onClick={submit} loading={saving}>
+              {t('accounts.submit')}
+            </Button>
+          </>
+        }
+      >
+        <form onSubmit={submit} noValidate className="flex flex-col gap-4">
+          <Input label={t('accounts.form.fullName')} value={form.fullName} onChange={set('fullName')} error={errors.fullName} required />
+          <Input label={t('accounts.form.cne')} value={form.CNE} onChange={set('CNE')} hint={t('accounts.form.cneHint')} />
+          <Input
+            label={t('accounts.form.email')}
+            type="email"
+            dir="ltr"
+            autoComplete="off"
+            value={form.email}
+            onChange={set('email')}
+            error={errors.email}
+            required
+          />
+          <Input label={t('accounts.form.phone')} value={form.phone} onChange={set('phone')} placeholder="+2126…" dir="ltr" />
+          <Input
+            label={t('accounts.form.password')}
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={set('password')}
+            error={errors.password}
+            hint={t('accounts.form.passwordHint')}
+            required
+          />
+          <Select label={t('accounts.form.type')} value={form.role} onChange={set('role')}>
+            <option value="parking_owner">{t('accounts.form.owner')}</option>
+            <option value="technicien">{t('accounts.form.technician')}</option>
+          </Select>
+          <button type="submit" className="sr-only">
+            {t('accounts.submit')}
+          </button>
+        </form>
+      </Drawer>
 
-        {/* Right: Create account form */}
-        <div className="card">
-          <div className="card-body">
-            <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px' }}>Créer un compte</h3>
-
-            {message && (
-              <div className={message.type === 'success' ? 'badge-success' : 'login-error'} style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '16px', background: message.type === 'success' ? 'rgba(16,185,129,0.08)' : undefined, border: message.type === 'success' ? '1px solid rgba(16,185,129,0.2)' : undefined, color: message.type === 'success' ? 'var(--success)' : undefined, fontSize: '13px' }}>
-                {message.text}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label className="form-label">Nom complet</label>
-                <input className="form-input" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">CNE</label>
-                <input className="form-input" value={form.CNE} onChange={(e) => setForm({ ...form, CNE: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input className="form-input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Téléphone</label>
-                <input className="form-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Mot de passe</label>
-                <input className="form-input" type="password" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Type de compte</label>
-                <select className="form-select" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                  <option value="parking_owner">Propriétaire de parking</option>
-                  <option value="technicien">Technicien</option>
-                </select>
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={saving}>
-                {saving ? 'Création...' : 'Créer le compte'}
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
+      <Modal
+        open={!!pending}
+        onClose={() => setPending(null)}
+        title={pending?.isActive === false ? t('accounts.status.enableTitle') : t('accounts.status.disableTitle')}
+        className="text-start"
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setPending(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant={pending?.isActive === false ? 'primary' : 'danger'} onClick={toggleStatus} loading={toggling}>
+              {pending?.isActive === false ? t('accounts.status.enable') : t('accounts.status.disable')}
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-text">
+          {pending?.isActive === false
+            ? t('accounts.status.enableText', { name: pending?.fullName })
+            : t('accounts.status.disableText', { name: pending?.fullName })}
+        </p>
+      </Modal>
+    </>
   );
 }

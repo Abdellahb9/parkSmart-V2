@@ -1,60 +1,67 @@
-import { useState, useEffect } from 'react';
-import api from '../../api';
+import { Car, Gift, Sparkles, Ticket, Wrench } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { AsyncState, Badge, Card, CardBody } from '../../components/ui';
+import { PageHeader } from '../../layouts/AppShell';
+import { useAsync } from '../../hooks/useAsync';
+import { ownerService } from '../../services';
+import { fmtNumber } from '../../lib/format';
 
-const typeLabels = {
-  free_wash: '🚿 Lavage auto',
-  discount_coupon: '🎫 Bon d\'achat',
-  free_vidange: '🔧 Vidange',
-  free_reservation: '🅿️ Réservation gratuite',
-};
+const TYPE_ICONS = { free_reservation: Ticket, discount_coupon: Gift, free_wash: Car, free_vidange: Wrench };
 
-export default function RewardsPage() {
-  const [rewards, setRewards] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/owner/rewards')
-      .then(({ data }) => setRewards(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+export default function OwnerRewardsPage() {
+  const { t } = useTranslation();
+  const { data, loading, error, reload } = useAsync(() => ownerService.rewards(), []);
+  const rewards = data ?? [];
 
   return (
-    <div>
-      <div className="page-header">
-        <h1>Récompenses</h1>
-        <p>Programme de fidélité pour vos clients</p>
-      </div>
+    <>
+      <PageHeader
+        title={t('owner.rewards.title')}
+        description={t('owner.rewards.description')}
+      />
 
-      {loading ? (
-        <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '40px' }}>Chargement...</p>
-      ) : rewards.length === 0 ? (
-        <div className="card">
-          <div className="card-body" style={{ textAlign: 'center', padding: '40px' }}>
-            <p style={{ color: 'var(--text-secondary)' }}>Aucune récompense configurée</p>
+      <AsyncState
+        loading={loading}
+        error={error}
+        onRetry={reload}
+        empty={!rewards.length}
+        emptyIcon={Sparkles}
+        emptyTitle={t('owner.rewards.emptyTitle')}
+        emptyDescription={t('owner.rewards.emptyHint')}
+      >
+        {() => (
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {rewards.map((r) => {
+              const Icon = TYPE_ICONS[r.type] ?? Gift;
+              const typeLabel = t(`owner.rewards.types.${r.type}`, { defaultValue: r.type });
+              return (
+                <Card key={r._id}>
+                  <CardBody className="flex h-full flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="grid size-10 shrink-0 place-items-center rounded-md bg-accent-soft text-accent">
+                        <Icon aria-hidden="true" className="size-5" />
+                      </span>
+                      <Badge tone="neutral">{typeLabel}</Badge>
+                    </div>
+
+                    <div className="flex-1">
+                      <h3 dir="auto" className="font-semibold text-text">{r.title}</h3>
+                      {r.description && <p dir="auto" className="mt-1 text-sm text-text-muted">{r.description}</p>}
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                      <Badge tone="primary">
+                        {t('common.reservations', { count: r.requiredBookings, n: fmtNumber(r.requiredBookings) })}
+                      </Badge>
+                      <span className="text-sm text-text-muted">{r.parkingId?.name ?? t('owner.rewards.allParkings')}</span>
+                    </div>
+                  </CardBody>
+                </Card>
+              );
+            })}
           </div>
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-          {rewards.map((r) => (
-            <div key={r._id} className="card" style={{ transition: 'var(--transition)' }}>
-              <div className="card-body">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px' }}>
-                  <h3 style={{ fontSize: '16px', fontWeight: '600' }}>{r.title}</h3>
-                  <span style={{ fontSize: '28px' }}>{typeLabels[r.type]?.split(' ')[0] || '🎁'}</span>
-                </div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>{r.description}</p>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="badge badge-primary">{r.requiredBookings} réservations requises</span>
-                  <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {r.parkingId ? r.parkingId.name : 'Global'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+        )}
+      </AsyncState>
+    </>
   );
 }

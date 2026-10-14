@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "tokens": "node ../../design/build-tokens.mjs",
+    "tokens:check": "node ../../design/build-tokens.mjs --check",
+    "predev": "npm run tokens",
+    "prebuild": "npm run tokens && npm run i18n:check",
+    "i18n:check": "node scripts/check-i18n.mjs"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
@@ -16,10 +21,16 @@
     "@tailwindcss/vite": "^4.3.0",
     "@vitejs/plugin-react": "^6.0.2",
     "axios": "^1.17.0",
+    "i18next": "^26.4.4",
     "leaflet": "^1.9.4",
+    "lucide-react": "^1.55.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-i18next": "^17.0.16",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.17.0",
     "recharts": "^3.8.1",
+    "socket.io-client": "^4.8.4",
     "tailwindcss": "^4.3.0",
     "zustand": "^5.0.14"
   }
