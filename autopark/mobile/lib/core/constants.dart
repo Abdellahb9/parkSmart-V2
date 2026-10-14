@@ -17,10 +17,15 @@ class AppColors {
 }
 
 class ApiConfig {
-  // Change this to your backend URL
-  // For Android device on same WiFi use your computer's IP address
-  // For Android emulator use 10.0.2.2, for iOS simulator/Chrome use localhost
-  static const String baseUrl = 'http://10.68.198.165:5000/api';
+  // Backend base URL. Override per run instead of editing this file:
+  //   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:5000/api
+  //
+  // The default targets the Android emulator's host loopback, so a fresh
+  // clone runs with no edit. iOS simulator / desktop: pass http://localhost:5000/api.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:5000/api',
+  );
 
   // Laayoune coordinates
   static const double defaultLat = 27.1536;

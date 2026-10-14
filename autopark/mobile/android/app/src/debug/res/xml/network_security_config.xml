@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  DEBUG BUILDS ONLY. The development backend is plain HTTP on localhost or a
+  LAN address, which Android 9+ blocks by default. This file lives in
+  src/debug/, so release builds keep Android's secure default (cleartext
+  denied) and this never ships to users.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

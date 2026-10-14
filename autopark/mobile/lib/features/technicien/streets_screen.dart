@@ -1,224 +1,542 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import '../../core/api_service.dart';
-import '../../core/constants.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+// intl has its own TextDirection; the widgets need Flutter's.
+import 'package:intl/intl.dart' hide TextDirection;
+
+import '../../design/app_theme.dart';
+import '../../l10n/l10n.dart';
+import '../../models/models.dart';
+import '../../repositories/repositories.dart';
+import '../../widgets/widgets.dart';
 
 class StreetsScreen extends StatefulWidget {
   const StreetsScreen({super.key});
+
   @override
   State<StreetsScreen> createState() => _StreetsScreenState();
 }
 
 class _StreetsScreenState extends State<StreetsScreen> {
-  List<dynamic> _streets = [];
+  final _search = TextEditingController();
+  List<StreetParking> _streets = [];
   bool _loading = true;
-  dynamic _selectedStreet;
-  List<dynamic> _spots = [];
-  bool _loadingSpots = false;
+  Object? _error;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _loadStreets();
+    _load();
   }
 
-  Future<void> _loadStreets() async {
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
     try {
-      final data = await ApiService.get('/technicien/streets');
-      setState(() { _streets = List.from(data); _loading = false; });
+      final list = await technicianRepo.streets();
+      if (!mounted) return;
+      setState(() {
+        _streets = list;
+        _loading = false;
+      });
     } catch (e) {
-      setState(() => _loading = false);
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
     }
   }
 
-  Future<void> _loadStreetSpots(String id) async {
-    setState(() => _loadingSpots = true);
-    try {
-      final data = await ApiService.get('/technicien/streets/$id/spots');
-      setState(() { _spots = List.from(data['spots']); _loadingSpots = false; });
-    } catch (e) {
-      setState(() => _loadingSpots = false);
-    }
+  List<StreetParking> get _visible {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _streets;
+    return _streets
+        .where((s) => s.name.toLowerCase().contains(q) || s.address.toLowerCase().contains(q))
+        .toList();
   }
 
-  Future<void> _issueFine(String carPlate, int spotNumber) async {
-    final plateController = TextEditingController(text: carPlate);
-    final reasonController = TextEditingController(text: 'Stationnement sans réservation');
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Émettre une amende'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: plateController, decoration: const InputDecoration(labelText: 'Plaque d\'immatriculation')),
-            const SizedBox(height: 12),
-            TextField(controller: reasonController, decoration: const InputDecoration(labelText: 'Raison'), maxLines: 2),
-          ],
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    return Scaffold(
+      appBar: AppBar(title: Text(l.streetsTitle)),
+      body: RefreshIndicator(
+        onRefresh: () => _load(silent: true),
+        child: AsyncView(
+          loading: _loading,
+          error: _error,
+          onRetry: _load,
+          isEmpty: _streets.isEmpty,
+          emptyIcon: Icons.add_road,
+          emptyTitle: l.streetsEmpty,
+          emptyMessage: l.streetsEmptyHint,
+          builder: (context) => ListView(
+            padding: const EdgeInsets.all(ApSpace.s4),
+            children: [
+              TextField(
+                controller: _search,
+                onChanged: (v) => setState(() => _query = v),
+                decoration: InputDecoration(
+                  hintText: l.streetsSearch,
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: l.commonClear,
+                          onPressed: () {
+                            _search.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                ),
+              ),
+              const AppGap(ApSpace.s4),
+              if (_visible.isEmpty)
+                AppCard(
+                  child: Text(l.streetsNoResult(_query), style: Theme.of(context).textTheme.bodySmall),
+                )
+              else
+                for (final street in _visible) ...[
+                  _StreetTile(
+                    street: street,
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => StreetSpotsScreen(street: street)),
+                      );
+                      if (mounted) _load(silent: true);
+                    },
+                  ),
+                  const AppGap(ApSpace.s3),
+                ],
+            ],
+          ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Émettre l\'amende'),
+      ),
+    );
+  }
+}
+
+class _StreetTile extends StatelessWidget {
+  final StreetParking street;
+  final VoidCallback onTap;
+
+  const _StreetTile({required this.street, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final occupancy = street.occupancy;
+    final tone = street.availableSpots == 0
+        ? c.spotOccupied
+        : (occupancy > 0.75 ? c.spotReserved : c.spotFree);
+
+    return AppCard(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(color: c.accentSoft, borderRadius: BorderRadius.circular(ApRadius.sm)),
+                child: Icon(Icons.add_road, color: c.parkingStreet, size: 20),
+              ),
+              const AppGap(ApSpace.s3, axis: Axis.horizontal),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(street.name, style: Theme.of(context).textTheme.titleSmall),
+                    if (street.address.isNotEmpty)
+                      Text(street.address, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: c.textMuted),
+            ],
+          ),
+          const AppGap(ApSpace.s3),
+          // Availability at a glance, not just a number.
+          ClipRRect(
+            borderRadius: BorderRadius.circular(ApRadius.full),
+            child: LinearProgressIndicator(
+              value: occupancy,
+              minHeight: 8,
+              backgroundColor: c.surfaceAlt,
+              valueColor: AlwaysStoppedAnimation(tone),
+            ),
+          ),
+          const AppGap(ApSpace.s2),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              context.l10n.streetsStats(
+                street.availableSpots,
+                street.totalSpots - street.availableSpots,
+                street.totalSpots,
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ),
         ],
       ),
     );
+  }
+}
 
-    if (result == true && _selectedStreet != null) {
-      try {
-        await ApiService.post('/technicien/fines', {
-          'streetParkingId': _selectedStreet['_id'],
-          'carPlate': plateController.text.trim(),
-          'reason': reasonController.text.trim(),
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Amende émise'), backgroundColor: AppColors.success),
-          );
-        }
-      } catch (e) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+/// Spot view for one street.
+///
+/// A real route rather than in-page state, so the hardware back button
+/// returns to the list instead of leaving the technician area.
+class StreetSpotsScreen extends StatefulWidget {
+  final StreetParking street;
+  const StreetSpotsScreen({super.key, required this.street});
+
+  @override
+  State<StreetSpotsScreen> createState() => _StreetSpotsScreenState();
+}
+
+class _StreetSpotsScreenState extends State<StreetSpotsScreen> {
+  List<StreetSpot> _spots = [];
+  bool _loading = true;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final spots = await technicianRepo.spots(widget.street.id);
+      if (!mounted) return;
+      setState(() {
+        _spots = spots;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _fine(StreetSpot spot) async {
+    final issued = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => _FineSheet(street: widget.street, spot: spot),
+    );
+    if (issued == true && mounted) {
+      // The list used to stay stale, making duplicate fines easy.
+      _load(silent: true);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final l = context.l10n;
+    final fmt = DateFormat('HH:mm', l.localeName);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Parkings voie publique')),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _selectedStreet == null
-              ? _buildStreetsList()
-              : _buildSpotsList(),
-    );
-  }
-
-  Widget _buildStreetsList() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _streets.length,
-      itemBuilder: (context, index) {
-        final s = _streets[index];
-        return GestureDetector(
-          onTap: () {
-            setState(() => _selectedStreet = s);
-            _loadStreetSpots(s['_id']);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 6)],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.add_road, color: AppColors.accentDark),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(s['name'], style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-                      Text('${s['totalSpots']} places • ${s['availableSpots']} disponibles', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSpotsList() {
-    return Column(
-      children: [
-        // Back button + title
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
+      appBar: AppBar(title: Text(widget.street.name)),
+      body: RefreshIndicator(
+        onRefresh: () => _load(silent: true),
+        child: AsyncView(
+          loading: _loading,
+          error: _error,
+          onRetry: _load,
+          isEmpty: _spots.isEmpty,
+          emptyTitle: l.bookingNoSpots,
+          builder: (context) => ListView(
+            padding: const EdgeInsets.all(ApSpace.s4),
             children: [
-              IconButton(
-                onPressed: () => setState(() { _selectedStreet = null; _spots = []; }),
-                icon: const Icon(Icons.arrow_back),
-              ),
-              Text(_selectedStreet['name'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ),
-
-        if (_loadingSpots)
-          const Expanded(child: Center(child: CircularProgressIndicator()))
-        else
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _spots.length,
-              itemBuilder: (context, index) {
-                final spot = _spots[index];
-                final booking = spot['booking'];
-                final hasBooking = booking != null;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: hasBooking ? AppColors.success.withValues(alpha: 0.3) : AppColors.border),
-                  ),
+              for (final spot in _spots) ...[
+                AppCard(
+                  onTap: spot.isFree ? null : () => _fine(spot),
                   child: Row(
                     children: [
                       Container(
-                        width: 42, height: 42,
+                        width: 44,
+                        height: 44,
                         decoration: BoxDecoration(
-                          color: hasBooking ? AppColors.success.withValues(alpha: 0.1) : AppColors.textSecondary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(10),
+                          color: spot.isFree ? c.spotFreeBg : (spot.isOverstay ? c.spotOverstayBg : c.spotOccupiedBg),
+                          borderRadius: BorderRadius.circular(ApRadius.sm),
                         ),
-                        child: Center(child: Text('${spot['spotNumber']}', style: TextStyle(fontWeight: FontWeight.w700, color: hasBooking ? AppColors.success : AppColors.textSecondary))),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: hasBooking
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(booking['carPlate'], style: const TextStyle(fontWeight: FontWeight.w700)),
-                                  const Text('Réservé', style: TextStyle(fontSize: 12, color: AppColors.success)),
-                                ],
-                              )
-                            : const Text('VIDE', style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                      ),
-                      if (!hasBooking)
-                        ElevatedButton.icon(
-                          onPressed: () => _issueFine('', spot['spotNumber']),
-                          icon: const Icon(Icons.gavel, size: 16),
-                          label: const Text('Amende'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.danger,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            textStyle: const TextStyle(fontSize: 12),
+                        child: Center(
+                          child: Text(
+                            '${spot.spotNumber}',
+                            style: TextStyle(
+                              fontWeight: ApWeight.bold,
+                              color: spot.isFree ? c.spotFree : (spot.isOverstay ? c.spotOverstay : c.spotOccupied),
+                            ),
                           ),
                         ),
+                      ),
+                      const AppGap(ApSpace.s3, axis: Axis.horizontal),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              spot.isFree ? l.spotFreeTitle : (spot.carPlate != null ? isolate(spot.carPlate) : l.commonOccupied),
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            if (!spot.isFree && spot.endTime != null)
+                              Text(
+                                spot.isOverstay
+                                    ? l.spotOverstaySince(fmt.format(spot.endTime!))
+                                    : l.spotUntil(fmt.format(spot.endTime!)),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (spot.isOverstay)
+                        StatusBadge(label: l.badgeFine, tone: AppTone.overstay, icon: Icons.gavel_rounded)
+                      else if (!spot.isFree)
+                        StatusBadge(label: l.commonOccupied, tone: AppTone.occupied)
+                      else
+                        StatusBadge(label: l.commonFree, tone: AppTone.free),
                     ],
                   ),
-                );
-              },
-            ),
+                ),
+                const AppGap(ApSpace.s3),
+              ],
+            ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FineSheet extends StatefulWidget {
+  final StreetParking street;
+  final StreetSpot spot;
+
+  const _FineSheet({required this.street, required this.spot});
+
+  @override
+  State<_FineSheet> createState() => _FineSheetState();
+}
+
+class _FineSheetState extends State<_FineSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _plate;
+  final _reason = TextEditingController();
+  bool _sending = false;
+  XFile? _photo;
+
+
+  @override
+  void initState() {
+    super.initState();
+    // Prefilled from the active booking; the old form always passed an empty
+    // plate and dropped the spot number entirely.
+    _plate = TextEditingController(text: widget.spot.carPlate ?? '');
+  }
+
+  @override
+  void dispose() {
+    _plate.dispose();
+    _reason.dispose();
+    super.dispose();
+  }
+
+  /// Camera only, never the gallery: evidence has to be taken on the spot.
+  /// Downscaled before upload — a plate stays legible at 1600 px, and a
+  /// 12 MP original over mobile data is a long wait at the kerb.
+  Future<void> _takePhoto() async {
+    try {
+      final shot = await ImagePicker().pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 80,
+      );
+      if (shot == null || !mounted) return;
+      setState(() => _photo = shot);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.finePhotoFailed)));
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final l = context.l10n;
+    setState(() => _sending = true);
+    try {
+      await technicianRepo.issueFine(
+        streetParkingId: widget.street.id,
+        carPlate: _plate.text.trim().toUpperCase(),
+        reason: _reason.text.trim(),
+        spotNumber: widget.spot.spotNumber,
+        photoPath: _photo?.path,
+      );
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_photo != null ? l.fineIssuedWithPhoto : l.fineIssued)),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final reasons = [l.fineReasonOverstay, l.fineReasonNoBooking, l.fineReasonObstruction];
+    return Padding(
+      padding: EdgeInsets.only(
+        left: ApSpace.s5,
+        right: ApSpace.s5,
+        top: ApSpace.s5,
+        bottom: MediaQuery.viewInsetsOf(context).bottom + ApSpace.s5,
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l.fineTitle, style: Theme.of(context).textTheme.titleMedium),
+            const AppGap(ApSpace.s1),
+            Text(
+              l.fineSubtitle(widget.street.name, widget.spot.spotNumber),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const AppGap(ApSpace.s4),
+            TextFormField(
+              controller: _plate,
+              textCapitalization: TextCapitalization.characters,
+              decoration: InputDecoration(labelText: l.finePlate, hintText: l.plateHint),
+              textDirection: TextDirection.ltr,
+              validator: (v) => (v ?? '').trim().length < 4 ? l.finePlateRequired : null,
+            ),
+            const AppGap(ApSpace.s3),
+            Wrap(
+              spacing: ApSpace.s2,
+              children: [
+                for (final r in reasons)
+                  ActionChip(label: Text(r), onPressed: () => setState(() => _reason.text = r)),
+              ],
+            ),
+            const AppGap(ApSpace.s3),
+            TextFormField(
+              controller: _reason,
+              maxLines: 2,
+              decoration: InputDecoration(labelText: l.fineReason),
+              validator: (v) => (v ?? '').trim().length < 5 ? l.fineReasonRequired : null,
+            ),
+            const AppGap(ApSpace.s4),
+            _PhotoField(
+              photo: _photo,
+              onTake: _sending ? null : _takePhoto,
+              onRemove: _sending ? null : () => setState(() => _photo = null),
+            ),
+            const AppGap(ApSpace.s5),
+            AppButton(
+              label: l.fineSubmit,
+              icon: Icons.gavel_rounded,
+              variant: AppButtonVariant.danger,
+              loading: _sending,
+              expand: true,
+              onPressed: _submit,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Optional photo of the plate, attached to the fine as evidence.
+class _PhotoField extends StatelessWidget {
+  final XFile? photo;
+  final VoidCallback? onTake;
+  final VoidCallback? onRemove;
+
+  const _PhotoField({required this.photo, required this.onTake, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final c = context.colors;
+
+    if (photo == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          OutlinedButton.icon(
+            onPressed: onTake,
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: Text(l.fineAddPhoto),
+          ),
+          const AppGap(ApSpace.s1),
+          Text(l.finePhotoHint, style: TextStyle(fontSize: ApText.xs, color: c.textMuted)),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(ApRadius.md),
+          child: Image.file(File(photo!.path), width: 88, height: 66, fit: BoxFit.cover),
+        ),
+        const AppGap(ApSpace.s3, axis: Axis.horizontal),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l.finePhoto, style: Theme.of(context).textTheme.titleSmall),
+              Wrap(
+                spacing: ApSpace.s1,
+                children: [
+                  TextButton(onPressed: onTake, child: Text(l.fineRetakePhoto)),
+                  TextButton(
+                    onPressed: onRemove,
+                    child: Text(l.fineRemovePhoto, style: TextStyle(color: c.danger)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

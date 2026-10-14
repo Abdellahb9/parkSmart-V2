@@ -1,124 +1,163 @@
-import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'api_service.dart';
+import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/models.dart';
+import '../repositories/repositories.dart';
+import 'api_service.dart';
+import 'token_storage.dart';
+
+/// Session state for the whole app.
+///
+/// Replaces the previous hand-rolled string encoding, the plaintext token, and
+/// the complete absence of 401 handling that left the app in a silent zombie
+/// session once the 7-day token expired.
 class AuthProvider extends ChangeNotifier {
-  Map<String, dynamic>? _user;
+  static const _onboardingKey = 'onboarding_seen';
+
+  AppUser? _user;
   String? _token;
   bool _loading = false;
+  bool _bootstrapped = false;
+  bool _onboardingSeen = false;
 
-  Map<String, dynamic>? get user => _user;
-  String? get token => _token;
+  AppUser? get user => _user;
   bool get loading => _loading;
-  bool get isAuthenticated => _token != null;
-  String get role => _user?['role'] ?? '';
+
+  /// False until the stored session has been read, so the splash can hold the
+  /// router instead of flashing the login screen on every cold start.
+  bool get bootstrapped => _bootstrapped;
+  bool get onboardingSeen => _onboardingSeen;
+  bool get isAuthenticated => _token != null && _user != null;
+  String get role => _user?.role ?? '';
 
   AuthProvider() {
-    _loadFromPrefs();
+    ApiService.onUnauthorized = _handleUnauthorized;
+    _restore();
   }
 
-  Future<void> _loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString('auth_token');
-    final userData = prefs.getString('auth_user');
-    if (_token != null && userData != null) {
-      try {
-        _user = Map<String, dynamic>.from(
-          Uri.splitQueryString(userData).isEmpty
-              ? {} // fallback
-              : _parseUserData(userData),
-        );
-      } catch (_) {
-        // If parsing fails, clear stored data
-        await _clearPrefs();
-      }
+  Future<void> _restore() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _onboardingSeen = prefs.getBool(_onboardingKey) ?? false;
+    } catch (_) {
+      _onboardingSeen = false;
     }
-    notifyListeners();
-  }
-
-  Map<String, dynamic> _parseUserData(String data) {
-    // Simple key-value parsing
-    final parts = data.split('|||');
-    final map = <String, dynamic>{};
-    for (final part in parts) {
-      final idx = part.indexOf('=');
-      if (idx > 0) {
-        map[part.substring(0, idx)] = part.substring(idx + 1);
-      }
-    }
-    return map;
-  }
-
-  String _serializeUser(Map<String, dynamic> user) {
-    return user.entries.map((e) => '${e.key}=${e.value}').join('|||');
-  }
-
-  Future<Map<String, dynamic>> login(String email, String password) async {
-    _loading = true;
-    notifyListeners();
 
     try {
-      final data = await ApiService.post('/auth/login', {
-        'email': email,
-        'password': password,
-      });
+      final token = await TokenStorage.readToken();
+      final userJson = await TokenStorage.readUser();
+      if (token != null && userJson != null) {
+        _token = token;
+        _user = AppUser.fromJson(userJson);
+      }
+    } catch (_) {
+      await TokenStorage.clear();
+    }
 
-      _user = Map<String, dynamic>.from(data['user']);
-      _token = data['token'];
+    _bootstrapped = true;
+    notifyListeners();
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', _token!);
-      await prefs.setString('auth_user', _serializeUser(_user!));
+    if (_token == null) return;
 
-      _loading = false;
+    // Confirm the session and refresh the role from the server.
+    try {
+      final fresh = await authRepo.me();
+      _user = fresh;
+      await TokenStorage.saveUser(fresh.toJson());
       notifyListeners();
-      return _user!;
-    } catch (e) {
-      _loading = false;
-      notifyListeners();
-      rethrow;
+    } on ApiException catch (e) {
+      if (e.isUnauthorized) await logout();
+      // Offline or server down: keep the cached session rather than
+      // throwing the user out for a network blip.
+    } catch (_) {
+      // Same.
     }
   }
 
-  Future<Map<String, dynamic>> register(String fullName, String email, String password, String phone) async {
+  void _handleUnauthorized() {
+    if (isAuthenticated) logout();
+  }
+
+  Future<AppUser> login(String email, String password) async {
     _loading = true;
     notifyListeners();
-
     try {
-      final data = await ApiService.post('/auth/register', {
-        'fullName': fullName,
-        'email': email,
-        'password': password,
-        'phone': phone,
-      });
-
-      _user = Map<String, dynamic>.from(data['user']);
-      _token = data['token'];
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('auth_token', _token!);
-      await prefs.setString('auth_user', _serializeUser(_user!));
-
+      final session = await authRepo.login(email, password);
+      await _apply(session);
+      return session.user;
+    } finally {
       _loading = false;
       notifyListeners();
-      return _user!;
-    } catch (e) {
-      _loading = false;
-      notifyListeners();
-      rethrow;
     }
+  }
+
+  Future<AppUser> register({
+    required String fullName,
+    required String email,
+    required String password,
+    required String phone,
+  }) async {
+    _loading = true;
+    notifyListeners();
+    try {
+      final result = await authRepo.register(
+        fullName: fullName,
+        email: email,
+        password: password,
+        phone: phone,
+      );
+      await _apply(result);
+      return result.user;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _apply(AuthSession session) async {
+    _token = session.token;
+    _user = session.user;
+    await TokenStorage.save(token: session.token, refreshToken: session.refreshToken, user: session.user.toJson());
   }
 
   Future<void> logout() async {
-    await _clearPrefs();
+    // Read before clearing, then end the session on the server without
+    // making the user wait for it.
+    final refreshToken = await TokenStorage.readRefreshToken();
+    await TokenStorage.clear();
+    _user = null;
+    _token = null;
+    notifyListeners();
+    unawaited(authRepo.logout(refreshToken));
+  }
+
+  /// Changes the password; every other device is signed out by the server and
+  /// this one continues on the fresh session it hands back.
+  Future<void> changePassword(String currentPassword, String newPassword) async {
+    final session = await authRepo.changePassword(currentPassword, newPassword);
+    await _apply(session);
+    notifyListeners();
+  }
+
+  /// Signs out every device, this one included.
+  Future<void> logoutEverywhere() async {
+    await authRepo.logoutAll();
+    await TokenStorage.clear();
     _user = null;
     _token = null;
     notifyListeners();
   }
 
-  Future<void> _clearPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('auth_token');
-    await prefs.remove('auth_user');
+  Future<void> completeOnboarding() async {
+    _onboardingSeen = true;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_onboardingKey, true);
+    } catch (_) {
+      // Not persisting just means it shows again next launch.
+    }
   }
 }

@@ -1,69 +1,132 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/auth_provider.dart';
-import '../../core/constants.dart';
+import '../../core/locale_controller.dart';
+import '../../core/theme_controller.dart';
+import '../../design/app_theme.dart';
+import '../../l10n/l10n.dart';
+import '../profile/profile_screen.dart' show LanguageTile;
+import '../profile/security_sheet.dart';
+import '../../widgets/widgets.dart';
 
 class TechProfileScreen extends StatelessWidget {
   const TechProfileScreen({super.key});
 
+  Future<void> _logout(BuildContext context) async {
+    final l = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.logoutTitle),
+        content: Text(l.logoutBody),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l.logoutStay)),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(l.logoutConfirm, style: TextStyle(color: context.colors.danger)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await context.read<AuthProvider>().logout();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final user = auth.user;
-    final initials = (user?['fullName'] ?? 'T').toString().split(' ').map((n) => n.isNotEmpty ? n[0] : '').join().toUpperCase();
+    final c = context.colors;
+    final user = context.watch<AuthProvider>().user;
+    final l = context.l10n;
+    final theme = context.watch<ThemeController>();
+    final locale = context.watch<LocaleController>();
+    final themeLabel = switch (theme.mode) {
+      ThemeMode.light => l.themeLight,
+      ThemeMode.dark => l.themeDark,
+      ThemeMode.system => l.themeSystem,
+    };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon profil')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [AppColors.primary, AppColors.primaryDark]),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 44,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w700)),
+      appBar: AppBar(title: Text(l.profileTitle)),
+      // Scrollable: the old fixed Column with a Spacer overflowed on short
+      // screens and at larger text sizes.
+      body: ListView(
+        padding: const EdgeInsets.all(ApSpace.s4),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(ApSpace.s5),
+            decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(ApRadius.lg)),
+            child: Row(
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: c.onPrimary.withValues(alpha: 0.18),
+                    shape: BoxShape.circle,
                   ),
-                  const SizedBox(height: 16),
-                  Text(user?['fullName'] ?? '', style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(20)),
-                    child: const Text('Technicien', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(user?['email'] ?? '', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                  Text(user?['phone'] ?? '', style: TextStyle(color: Colors.white.withValues(alpha: 0.7))),
-                ],
-              ),
-            ),
-
-            const Spacer(),
-
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => auth.logout(),
-                icon: const Icon(Icons.logout, color: AppColors.danger),
-                label: const Text('Déconnexion', style: TextStyle(color: AppColors.danger)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: AppColors.danger),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.engineering_outlined, color: c.onPrimary),
                 ),
-              ),
+                const AppGap(ApSpace.s4, axis: Axis.horizontal),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.fullName ?? '—',
+                        style: TextStyle(color: c.onPrimary, fontSize: ApText.lg, fontWeight: ApWeight.semibold),
+                      ),
+                      const AppGap(ApSpace.s1),
+                      Text(
+                        user?.email ?? '',
+                        // Emails and phone numbers read left to right even in Arabic; without
+                        // this the bidi algorithm prints +212… as 212…+.
+                        textDirection: TextDirection.ltr,
+                        style: TextStyle(color: c.onPrimary.withValues(alpha: 0.8), fontSize: ApText.sm),
+                      ),
+                      if (user?.phone != null)
+                        Text(
+                          user!.phone!,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(color: c.onPrimary.withValues(alpha: 0.8), fontSize: ApText.sm),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          const AppGap(ApSpace.s4),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: StatusBadge(label: l.roleTechnician, tone: AppTone.street, dot: true),
+          ),
+          const AppGap(ApSpace.s6),
+          AppCard(
+            padding: const EdgeInsets.symmetric(vertical: ApSpace.s2),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.brightness_6_outlined),
+                  title: Text(l.themeTitle),
+                  subtitle: Text(themeLabel),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: theme.cycle,
+                ),
+                LanguageTile(controller: locale),
+                const SecurityTile(),
+              ],
+            ),
+          ),
+          const AppGap(ApSpace.s6),
+          AppButton(
+            label: l.profileLogout,
+            icon: Icons.logout_rounded,
+            variant: AppButtonVariant.danger,
+            expand: true,
+            onPressed: () => _logout(context),
+          ),
+        ],
       ),
     );
   }

@@ -1,159 +1,204 @@
 import 'package:flutter/material.dart';
-import '../../core/api_service.dart';
-import '../../core/constants.dart';
+// intl has its own TextDirection; the widgets need Flutter's.
+import 'package:intl/intl.dart' hide TextDirection;
+
+import '../../design/app_theme.dart';
+import '../../l10n/l10n.dart';
+import '../../models/models.dart';
+import '../../repositories/repositories.dart';
+import '../../widgets/widgets.dart';
 
 class ComplaintsScreen extends StatefulWidget {
   const ComplaintsScreen({super.key});
+
   @override
   State<ComplaintsScreen> createState() => _ComplaintsScreenState();
 }
 
 class _ComplaintsScreenState extends State<ComplaintsScreen> {
-  final _messageController = TextEditingController();
-  List<dynamic> _parkings = [];
-  List<dynamic> _complaints = [];
-  String? _selectedParkingId;
+  final _message = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  List<Parking> _parkings = [];
+  List<Complaint> _complaints = [];
+  String? _parkingId;
+  bool _loading = true;
   bool _sending = false;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _load();
   }
 
-  Future<void> _loadData() async {
-    try {
-      final parkingsData = await ApiService.get('/parkings');
-      final complaintsData = await ApiService.get('/complaints');
+  @override
+  void dispose() {
+    _message.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) {
       setState(() {
-        _parkings = List.from(parkingsData);
-        _complaints = List.from(complaintsData);
-        if (_parkings.isNotEmpty && _selectedParkingId == null) {
-          _selectedParkingId = _parkings[0]['_id'];
-        }
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      // Run both in parallel; a failure on either used to blank the whole page.
+      final results = await Future.wait([parkingRepo.list(), complaintRepo.mine()]);
+      if (!mounted) return;
+      setState(() {
+        _parkings = results[0] as List<Parking>;
+        _complaints = results[1] as List<Complaint>;
+        _parkingId ??= _parkings.isNotEmpty ? _parkings.first.id : null;
+        _loading = false;
       });
     } catch (e) {
-      debugPrint('Error: $e');
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        _loading = false;
+      });
     }
   }
 
-  Future<void> _submitComplaint() async {
-    if (_messageController.text.trim().isEmpty || _selectedParkingId == null) return;
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_parkingId == null) return;
+    FocusScope.of(context).unfocus();
+
     setState(() => _sending = true);
     try {
-      await ApiService.post('/complaints', {
-        'parkingId': _selectedParkingId,
-        'message': _messageController.text.trim(),
-      });
-      _messageController.clear();
-      await _loadData();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Réclamation envoyée'), backgroundColor: AppColors.success),
-        );
-      }
+      await complaintRepo.create(parkingId: _parkingId!, message: _message.text.trim());
+      if (!mounted) return;
+      _message.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.cmpSent)),
+      );
+      await _load(silent: true);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
-      setState(() => _sending = false);
+      // Guarded: this used to fire after the screen was gone.
+      if (mounted) setState(() => _sending = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l = context.l10n;
+    final fmt = DateFormat('d MMM yyyy', l.localeName);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Réclamations')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Submit form
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Nouvelle réclamation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 16),
-
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedParkingId,
-                    decoration: const InputDecoration(labelText: 'Parking concerné'),
-                    items: _parkings.map<DropdownMenuItem<String>>((p) {
-                      return DropdownMenuItem(value: p['_id'] as String, child: Text(p['name'] as String));
-                    }).toList(),
-                    onChanged: (v) => setState(() => _selectedParkingId = v),
-                  ),
-                  const SizedBox(height: 14),
-
-                  TextField(
-                    controller: _messageController,
-                    maxLines: 4,
-                    decoration: const InputDecoration(
-                      labelText: 'Votre message',
-                      alignLabelWithHint: true,
-                      hintText: 'Décrivez votre problème...',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _sending ? null : _submitComplaint,
-                      child: _sending
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Text('Envoyer'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-            const Text('Mes réclamations', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 12),
-
-            ..._complaints.map((c) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      appBar: AppBar(title: Text(l.cmpTitle)),
+      body: RefreshIndicator(
+        onRefresh: () => _load(silent: true),
+        child: AsyncView(
+          loading: _loading,
+          error: _error,
+          onRetry: _load,
+          builder: (context) => ListView(
+            padding: const EdgeInsets.all(ApSpace.s4),
+            children: [
+              AppCard(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c['parkingId']?['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: (c['status'] == 'open' ? AppColors.warning : AppColors.success).withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
+                      Text(l.cmpReport, style: Theme.of(context).textTheme.titleMedium),
+                      const AppGap(ApSpace.s4),
+                      DropdownButtonFormField<String>(
+                        // `value`, not `initialValue`: the list arrives after
+                        // the first build and the two used to desync.
+                        initialValue: _parkingId,
+                        isExpanded: true,
+                        decoration: InputDecoration(labelText: l.cmpParking),
+                        items: [
+                          for (final p in _parkings)
+                            DropdownMenuItem(value: p.id, child: Text(p.name, overflow: TextOverflow.ellipsis)),
+                        ],
+                        onChanged: (v) => setState(() => _parkingId = v),
+                        validator: (v) => v == null ? l.cmpChooseParking : null,
+                      ),
+                      const AppGap(ApSpace.s4),
+                      TextFormField(
+                        controller: _message,
+                        maxLines: 4,
+                        maxLength: 500,
+                        decoration: InputDecoration(
+                          labelText: l.cmpMessage,
+                          hintText: l.cmpMessageHint,
+                          alignLabelWithHint: true,
                         ),
+                        validator: (v) => (v ?? '').trim().length < 10 ? l.cmpMessageMin : null,
+                      ),
+                      const AppGap(ApSpace.s2),
+                      AppButton(
+                        label: l.commonSend,
+                        icon: Icons.send_rounded,
+                        loading: _sending,
+                        expand: true,
+                        onPressed: _parkings.isEmpty ? null : _submit,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const AppGap(ApSpace.s6),
+              Text(l.cmpMine, style: Theme.of(context).textTheme.titleMedium),
+              const AppGap(ApSpace.s3),
+              if (_complaints.isEmpty)
+                AppCard(
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, color: context.colors.spotFree, size: 20),
+                      const AppGap(ApSpace.s3, axis: Axis.horizontal),
+                      Expanded(
                         child: Text(
-                          c['status'] == 'open' ? 'En cours' : 'Résolu',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c['status'] == 'open' ? AppColors.warning : AppColors.success),
+                          l.cmpNone,
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  Text(c['message'], style: const TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                )
+              else
+                for (final complaint in _complaints) ...[
+                  AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                complaint.parkingName ?? '',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ),
+                            StatusBadge(
+                              label: complaint.isResolved ? l.cmpResolved : l.cmpOpen,
+                              tone: complaint.isResolved ? AppTone.free : AppTone.reserved,
+                            ),
+                          ],
+                        ),
+                        const AppGap(ApSpace.s2),
+                        Text(isolate(complaint.message), style: Theme.of(context).textTheme.bodyMedium),
+                        if (complaint.createdAt != null) ...[
+                          const AppGap(ApSpace.s2),
+                          Text(fmt.format(complaint.createdAt!), style: Theme.of(context).textTheme.bodySmall),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const AppGap(ApSpace.s3),
                 ],
-              ),
-            )),
-          ],
+            ],
+          ),
         ),
       ),
     );
