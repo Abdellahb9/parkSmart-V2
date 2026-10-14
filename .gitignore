@@ -1,0 +1,24 @@
+# Secrets and local fixtures — never commit credentials
+.env
+.env.*
+!.env.example
+test-login.json
+*.local.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

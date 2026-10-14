@@ -1,0 +1,22 @@
+{
+  "primary":       { "light": "{navy.800}",  "dark": "{navy.600}" },
+  "primary-hover": { "light": "{navy.900}",  "dark": "{navy.500}" },
+  "primary-soft":  { "light": "{navy.50}",   "dark": "{navy.900}" },
+  "on-primary":    { "light": "{white}",     "dark": "{white}" },
+  "accent":        { "light": "{gold.500}",  "dark": "{gold.400}" },
+  "accent-soft":   { "light": "{gold.50}",   "dark": "{gold.900}" },
+  "on-accent":     { "light": "{slate.900}", "dark": "{slate.900}" },
+  "bg":            { "light": "{slate.50}",  "dark": "{slate.950}" },
+  "surface":       { "light": "{white}",     "dark": "{slate.900}" },
+  "surface-alt":   { "light": "{slate.100}", "dark": "{slate.800}" },
+  "border":        { "light": "{slate.200}", "dark": "{slate.700}" },
+  "border-strong": { "light": "{slate.300}", "dark": "{slate.600}" },
+  "text":          { "light": "{slate.900}", "dark": "{slate.50}" },
+  "text-muted":    { "light": "{slate.500}", "dark": "{slate.400}" },
+  "text-inverse":  { "light": "{white}",     "dark": "{slate.900}" },
+  "success":       { "light": "{green.600}", "dark": "{green.300}" },
+  "warning":       { "light": "{amber.600}", "dark": "{amber.300}" },
+  "danger":        { "light": "{red.600}",   "dark": "{red.300}" },
+  "danger-hover":  { "light": "{red.700}",   "dark": "{red.200}" },
+  "focus":         { "light": "{navy.400}",  "dark": "{navy.300}" }
+}

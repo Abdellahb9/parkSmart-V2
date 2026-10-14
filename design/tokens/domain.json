@@ -1,0 +1,15 @@
+{
+  "_comment": "Product meanings. The blue=normal / gold=voie publique map convention lives here, so web and mobile cannot drift apart.",
+  "parking-normal":    { "light": "{navy.500}",  "dark": "{navy.300}" },
+  "parking-street":    { "light": "{gold.500}",  "dark": "{gold.400}" },
+  "spot-free":         { "light": "{green.700}", "dark": "{green.300}" },
+  "spot-free-bg":      { "light": "{green.50}",  "dark": "#06301F" },
+  "spot-reserved":     { "light": "{amber.700}", "dark": "{amber.300}" },
+  "spot-reserved-bg":  { "light": "{amber.50}",  "dark": "#3A2A06" },
+  "spot-occupied":     { "light": "{red.700}",   "dark": "{red.300}" },
+  "spot-occupied-bg":  { "light": "{red.50}",    "dark": "#3A1212" },
+  "spot-overstay":     { "light": "{red.800}",   "dark": "{red.200}" },
+  "spot-overstay-bg":  { "light": "{red.100}",   "dark": "#4A1414" },
+  "spot-blocked":      { "light": "{slate.600}", "dark": "{slate.300}" },
+  "spot-blocked-bg":   { "light": "{slate.100}", "dark": "{slate.800}" }
+}
