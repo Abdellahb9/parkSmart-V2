@@ -3,22 +3,28 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const protect = require('../middleware/auth');
 const authorize = require('../middleware/role');
+const optionalAuth = require('../middleware/optionalAuth');
 const {
   getAll,
+  getNear,
   getById,
   getSpots,
   create,
   update,
 } = require('../controllers/parkingController');
 
-// GET /api/parkings — all parkings with availability
-router.get('/', getAll);
+// GET /api/parkings — public listing; signed-in callers see more (see controller)
+router.get('/', optionalAuth, getAll);
 
-// GET /api/parkings/:id — parking detail
-router.get('/:id', getById);
+// GET /api/parkings/near?lat=&lng=&radius= — closest first. Declared before
+// /:id so 'near' is never read as an id.
+router.get('/near', optionalAuth, getNear);
 
-// GET /api/parkings/:id/spots — spots array for booking UI
-router.get('/:id/spots', getSpots);
+// GET /api/parkings/:id — public detail; signed-in callers see more
+router.get('/:id', optionalAuth, getById);
+
+// GET /api/parkings/:id/spots — live occupancy map, for signed-in users only
+router.get('/:id/spots', protect, getSpots);
 
 // POST /api/parkings — admin only
 router.post(

@@ -6,16 +6,41 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "test": "jest --runInBand",
+    "test:watch": "jest --runInBand --watch",
+    "migrate": "node migrations/001-booking-lifecycle-and-payments.js && node migrations/002-time-aware-availability.js && node migrations/003-sessions-and-account-status.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.1",
     "express-validator": "^7.2.1",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
-    "multer": "^1.4.5-lts.1"
+    "multer": "^1.4.5-lts.1",
+    "pdfkit": "^0.20.2",
+    "pino": "^9.7.0",
+    "pino-http": "^10.5.0",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "pino-pretty": "^13.0.0",
+    "supertest": "^7.3.1"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "<rootDir>/tests/env.js"
+    ],
+    "testTimeout": 30000,
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ]
   }
 }

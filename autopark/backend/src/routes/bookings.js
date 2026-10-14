@@ -9,6 +9,10 @@ const {
   cancel,
   getUserReservations,
   complete,
+  extend,
+  checkIn,
+  checkInByToken,
+  checkOut,
 } = require('../controllers/bookingController');
 
 // POST /api/bookings — user only, atomic spot reservation
@@ -35,6 +39,18 @@ router.patch('/:id/cancel', protect, cancel);
 
 // PATCH /api/bookings/:id/complete — mark booking as done
 router.patch('/:id/complete', protect, authorize('admin', 'parking_owner'), complete);
+
+// PATCH /api/bookings/:id/extend — a driver extends their own active booking
+router.patch('/:id/extend', protect, extend);
+
+// POST /api/bookings/check-in — by QR token alone (scanner, typed code)
+router.post('/check-in', protect, authorize('admin', 'parking_owner', 'technicien'), checkInByToken);
+
+// POST /api/bookings/:id/check-in — owner or technician validates arrival
+router.post('/:id/check-in', protect, authorize('admin', 'parking_owner', 'technicien'), checkIn);
+
+// POST /api/bookings/:id/check-out — owner or technician records departure
+router.post('/:id/check-out', protect, authorize('admin', 'parking_owner', 'technicien'), checkOut);
 
 // GET /api/reservations — user's booking history
 router.get('/', protect, getUserReservations);

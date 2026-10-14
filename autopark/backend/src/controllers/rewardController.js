@@ -1,6 +1,7 @@
 const Reward = require('../models/Reward');
 const LoyaltyPoints = require('../models/LoyaltyPoints');
 const Parking = require('../models/Parking');
+const { serverError } = require('../utils/http');
 
 // GET /api/rewards — user's loyalty + available rewards
 exports.getRewards = async (req, res) => {
@@ -43,7 +44,7 @@ exports.getRewards = async (req, res) => {
       rewards: enrichedRewards,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -62,7 +63,7 @@ exports.getOwnerRewards = async (req, res) => {
 
     res.json(rewards);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -81,6 +82,6 @@ exports.createReward = async (req, res) => {
 
     res.status(201).json(reward);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };

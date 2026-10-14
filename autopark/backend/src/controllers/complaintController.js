@@ -1,4 +1,8 @@
 const Complaint = require('../models/Complaint');
+const Parking = require('../models/Parking');
+const { managesParking } = require('../utils/ownership');
+const { serverError } = require('../utils/http');
+const { paginate } = require('../utils/paginate');
 
 // POST /api/complaints — submit complaint
 exports.create = async (req, res) => {
@@ -13,34 +17,33 @@ exports.create = async (req, res) => {
 
     res.status(201).json(complaint);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
 // GET /api/complaints — user's complaints
 exports.getUserComplaints = async (req, res) => {
   try {
-    const complaints = await Complaint.find({ userId: req.user._id })
-      .populate('parkingId', 'name')
-      .sort({ createdAt: -1 });
+    const complaints = await paginate(req, res, Complaint, { userId: req.user._id }, (q) =>
+      q.populate('parkingId', 'name').sort({ createdAt: -1 })
+    );
 
     res.json(complaints);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
 // GET /api/admin/complaints — all complaints (admin)
 exports.getAll = async (req, res) => {
   try {
-    const complaints = await Complaint.find()
-      .populate('userId', 'fullName email')
-      .populate('parkingId', 'name')
-      .sort({ createdAt: -1 });
+    const complaints = await paginate(req, res, Complaint, {}, (q) =>
+      q.populate('userId', 'fullName email').populate('parkingId', 'name').sort({ createdAt: -1 })
+    );
 
     res.json(complaints);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -51,32 +54,41 @@ exports.getByParking = async (req, res) => {
     const ownerParkings = await Parking.find({ ownerId: req.user._id }).select('_id');
     const parkingIds = ownerParkings.map(p => p._id);
 
-    const complaints = await Complaint.find({ parkingId: { $in: parkingIds } })
-      .populate('userId', 'fullName email phone')
-      .populate('parkingId', 'name')
-      .sort({ createdAt: -1 });
+    const complaints = await paginate(req, res, Complaint, { parkingId: { $in: parkingIds } }, (q) =>
+      q.populate('userId', 'fullName email phone').populate('parkingId', 'name').sort({ createdAt: -1 })
+    );
 
     res.json(complaints);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
 // PATCH /api/complaints/:id/resolve — resolve a complaint
 exports.resolve = async (req, res) => {
   try {
-    const complaint = await Complaint.findByIdAndUpdate(
-      req.params.id,
-      { status: 'resolved' },
-      { new: true }
-    ).populate('userId', 'fullName email').populate('parkingId', 'name');
+    const complaint = await Complaint.findById(req.params.id);
 
     if (!complaint) {
       return res.status(404).json({ message: 'Complaint not found' });
     }
 
+    // Role is checked by the route; this checks the complaint is actually
+    // about a parking this owner owns.
+    const parking = await Parking.findById(complaint.parkingId).select('ownerId').lean();
+    if (!managesParking(parking, req.user)) {
+      return res.status(403).json({ message: 'Not authorized to resolve this complaint' });
+    }
+
+    complaint.status = 'resolved';
+    await complaint.save();
+    await complaint.populate([
+      { path: 'userId', select: 'fullName email' },
+      { path: 'parkingId', select: 'name' },
+    ]);
+
     res.json(complaint);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };

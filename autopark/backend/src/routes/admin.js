@@ -1,11 +1,12 @@
 const router = require('express').Router();
-const { body } = require('express-validator');
+const { body, param } = require('express-validator');
 const validate = require('../middleware/validate');
 const protect = require('../middleware/auth');
 const authorize = require('../middleware/role');
 const {
   getUsers,
   createUser,
+  setUserStatus,
   getAllReservations,
   getStats,
 } = require('../controllers/adminController');
@@ -28,6 +29,17 @@ router.post(
   ],
   validate,
   createUser
+);
+
+// PATCH /api/admin/users/:id/status — { isActive: true|false }
+router.patch(
+  '/users/:id/status',
+  [
+    param('id').isMongoId().withMessage('Invalid id'),
+    body('isActive').isBoolean({ strict: true }).withMessage('isActive must be true or false'),
+  ],
+  validate,
+  setUserStatus
 );
 
 // GET /api/admin/reservations

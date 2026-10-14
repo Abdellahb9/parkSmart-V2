@@ -2,11 +2,19 @@ const mongoose = require('mongoose');
 
 const spotSchema = new mongoose.Schema({
   spotNumber: { type: Number, required: true },
+  // What the spot is doing RIGHT NOW. Since bookings became time-aware this is
+  // a cache derived from them (services/availability.js), kept so every
+  // existing reader — map counts, occupancy gauges — stays correct unchanged.
   status: {
     type: String,
     enum: ['available', 'occupied', 'reserved'],
     default: 'available',
   },
+  // Short-lived mutex taken while a booking for this spot is being written,
+  // so two overlapping reservations cannot both pass the overlap check.
+  // Expires on its own if the server dies holding it. Never sent to clients.
+  lockUntil: { type: Date, default: null },
+  lockToken: { type: String, default: null },
 }, { _id: false });
 
 const parkingSchema = new mongoose.Schema({
@@ -71,6 +79,8 @@ const parkingSchema = new mongoose.Schema({
 
 // 2dsphere index for geospatial queries
 parkingSchema.index({ location: '2dsphere' });
+parkingSchema.index({ ownerId: 1 });
+parkingSchema.index({ type: 1 });
 
 // Auto-generate spots array when creating a new parking
 parkingSchema.pre('save', function (next) {

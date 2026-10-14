@@ -1,6 +1,7 @@
 const Booking = require('../models/Booking');
 const Parking = require('../models/Parking');
 const LoyaltyPoints = require('../models/LoyaltyPoints');
+const { serverError } = require('../utils/http');
 
 // GET /api/owner/dashboard — stats for owner's parkings
 exports.getDashboard = async (req, res) => {
@@ -117,7 +118,7 @@ exports.getDashboard = async (req, res) => {
       topLoyalUsers,
     });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -160,7 +161,7 @@ exports.getReservations = async (req, res) => {
 
     res.json({ active, completed, overtime });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
 
@@ -178,6 +179,6 @@ exports.getComplaints = async (req, res) => {
 
     res.json(complaints);
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+    serverError(res, error);
   }
 };
