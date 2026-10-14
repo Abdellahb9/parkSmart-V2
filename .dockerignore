@@ -1,0 +1,7 @@
+# The web image is the only one built from the repository root; it needs the
+# design tokens and the portal sources, nothing else.
+*
+!design/
+!autopark/web/
+autopark/web/node_modules
+autopark/web/dist

@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoPark — Smart Parking Case Study</title>
+  <meta name="description" content="AutoPark: a full-stack smart parking platform for Laâyoune with a Flutter mobile app, a React admin portal and a Node.js/Express + MongoDB API.">
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="color-scheme" content="dark">
+
+  <style>
+    /* =====================================================================
+       THEME TOKENS — swap these to match your portfolio
+       ===================================================================== */
+    :root {
+      --bg: #0f0f0f;
+      --surface: #17171a;
+      --surface-2: #1f1f24;
+      --border: #2a2a31;
+      --text: #ededf0;
+      --muted: #a1a1aa;            /* 7.4:1 on --bg */
+      --accent: #6c5ce7;           /* buttons, borders, glows */
+      --accent-hover: #5a4bd8;     /* keeps white text above 4.5:1 */
+      --accent-text: #a29bfe;      /* accent for small text: 7.9:1 on --bg */
+      --accent-soft: rgba(108, 92, 231, 0.14);
+      --accent-line: rgba(108, 92, 231, 0.55);
+      --lot-blue: #5b8def;         /* AutoPark map pin colours */
+      --lot-gold: #f5b43c;
+      --radius-lg: 20px;
+      --radius: 14px;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+      /* Inter isn't loaded here to keep the file self-contained —
+         your portfolio's font setup applies, otherwise system fonts are used. */
+      --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --maxw: 1120px;
+      --ease: 180ms ease;
+    }
+
+    /* ---- Base ---- */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 1rem;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { display: block; max-width: 100%; height: auto; }
+    a { color: var(--accent-text); text-underline-offset: 3px; }
+    a:hover { color: #c9c4ff; }
+    :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 3px; border-radius: 6px; }
+    h1, h2, h3, h4 { margin: 0; line-height: 1.2; letter-spacing: -0.02em; }
+    p { margin: 0 0 1em; }
+    code {
+      font-family: var(--mono);
+      font-size: 0.88em;
+      padding: 0.1em 0.4em;
+      border-radius: 6px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: #dcd9ff;
+    }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+    .section { padding: 64px 0; border-top: 1px solid var(--border); }
+    .section-head { max-width: 680px; margin-bottom: 32px; }
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent-text);
+    }
+    h2 { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.25rem); font-weight: 700; }
+    .subhead { font-size: 1.15rem; margin: 48px 0 20px; }
+
+    /* Shared line-icon styling for inline SVGs */
+    .icon svg, .btn svg {
+      fill: none; stroke: currentColor; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* ---- Hero ---- */
+    .hero {
+      position: relative;
+      overflow: hidden;
+      padding: 56px 0 80px;
+      background:
+        radial-gradient(900px 480px at 85% -10%, rgba(108, 92, 231, 0.28), transparent 60%),
+        radial-gradient(600px 400px at -10% 110%, rgba(108, 92, 231, 0.12), transparent 60%);
+    }
+    .hero-grid { display: grid; gap: 48px; align-items: center; }
+    .hero h1 { margin: 4px 0 16px; font-size: clamp(2.6rem, 1.6rem + 4vw, 4.25rem); font-weight: 800; }
+    .tagline { max-width: 36ch; margin-bottom: 24px; font-size: clamp(1.1rem, 1rem + 0.5vw, 1.3rem); color: #d4d4d8; }
+    .badges { list-style: none; padding: 0; margin: 0 0 28px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .badge {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: #e4e4e7;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 46px;
+      padding: 0 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background-color var(--ease), border-color var(--ease), transform var(--ease), box-shadow var(--ease);
+    }
+    .btn svg { width: 18px; height: 18px; }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 8px 24px rgba(108, 92, 231, 0.35); }
+    .btn-primary:hover { background: var(--accent-hover); color: #fff; transform: translateY(-2px); }
+    .btn-ghost { background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); color: var(--text); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); transform: translateY(-2px); }
+
+    .hero-media { position: relative; }
+    .browser {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .browser-bar { display: flex; gap: 6px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+    .browser-bar span { width: 10px; height: 10px; border-radius: 50%; background: #3a3a42; }
+    .browser img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; }
+    .phone {
+      position: absolute;
+      right: -2%;
+      bottom: -12%;
+      width: 25%;
+      max-width: 180px;
+      padding: 5px;
+      border-radius: 22px;
+      background: #0b0b0d;
+      border: 1px solid #34343c;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.55);
+    }
+    .phone img { border-radius: 17px; }
+
+    /* ---- Overview ---- */
+    .prose { max-width: 68ch; color: #d4d4d8; }
+    .facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 36px 0 0; }
+    .fact {
+      display: flex;
+      flex-direction: column-reverse; /* number shows first, reads "label: value" */
+      padding: 18px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .fact dt { color: var(--muted); font-size: 0.85rem; }
+    .fact dd { margin: 0; font-size: 1.8rem; font-weight: 700; line-height: 1.2; }
+
+    /* ---- Cards (features, stack, challenges) ---- */
+    .grid { display: grid; gap: 16px; }
+    .card {
+      padding: 24px;
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: transform var(--ease), border-color var(--ease), background-color var(--ease);
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--accent-line); background: #1a1a1f; }
+    .card h3 { margin: 16px 0 8px; font-size: 1.1rem; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent-text);
+    }
+    .icon svg { width: 22px; height: 22px; }
+    .dot { display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 50%; vertical-align: 1px; }
+    .dot-blue { background: var(--lot-blue); }
+    .dot-gold { background: var(--lot-gold); }
+
+    /* ---- Gallery ---- */
+    .gallery { display: grid; gap: 16px; }
+    .shot {
+      margin: 0;
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: transform var(--ease), border-color var(--ease);
+    }
+    .shot:hover { transform: translateY(-3px); border-color: var(--accent-line); }
+    .shot a { display: block; }
+    .shot-frame {
+      display: grid;
+      place-items: center;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, rgba(108, 92, 231, 0.28), transparent 70%), var(--surface-2);
+    }
+    .shot-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top left;
+      transition: transform 400ms ease;
+    }
+    .shot:hover .shot-frame img { transform: scale(1.03); }
+    .shot-frame.is-phone { place-items: start center; }
+    .shot-frame.is-phone img {
+      width: 56%;
+      height: auto;
+      margin-top: 7%;
+      border: 5px solid #0b0b0d;
+      border-bottom: 0;
+      border-radius: 20px 20px 0 0;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+    }
+    .shot figcaption { padding: 14px 16px 16px; font-size: 0.9rem; color: var(--muted); }
+    .shot figcaption strong { display: block; margin-bottom: 2px; font-size: 0.95rem; color: var(--text); }
+
+    /* ---- Tech stack ---- */
+    .stack-card h3 { display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
+    .stack-card > p { margin-bottom: 4px; }
+    .stack-card h4 {
+      margin: 18px 0 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .chips { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+    .stack-card h4 + .chips { margin-top: 0; }
+    .chips li {
+      padding: 5px 11px;
+      font-size: 0.85rem;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: #e4e4e7;
+    }
+
+    /* ---- Challenges ---- */
+    .challenges .card h3 { margin-top: 0; }
+    .card .lesson {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px dashed var(--border);
+      font-size: 0.92rem;
+      color: #d4d4d8;
+    }
+    .lesson b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent-text);
+    }
+    .next {
+      margin-top: 24px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      background: var(--accent-soft);
+      border: 1px solid rgba(108, 92, 231, 0.4);
+      color: #e4e4e7;
+    }
+    .next p { margin: 0; }
+
+    /* ---- Footer ---- */
+    .site-footer { padding: 32px 0 48px; border-top: 1px solid var(--border); font-size: 0.9rem; color: var(--muted); }
+    .site-footer .container { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; }
+    .site-footer p { margin: 0; }
+
+    /* ---- Breakpoints (mobile-first) ---- */
+    @media (min-width: 640px) {
+      .features { grid-template-columns: repeat(2, 1fr); }
+      .facts { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (min-width: 768px) {
+      .container { padding: 0 32px; }
+      .section { padding: 88px 0; }
+      .gallery { grid-template-columns: repeat(3, 1fr); }
+      .challenges { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 960px) {
+      .hero { padding: 88px 0 112px; }
+      .hero-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 56px; }
+      .features { grid-template-columns: repeat(3, 1fr); }
+      .stack { grid-template-columns: 1.35fr 1fr 1fr; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+      .card:hover, .shot:hover, .btn:hover, .shot:hover .shot-frame img { transform: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!--
+  SCREENSHOTS — real AutoPark screenshots, stored in assets/images/ next to this file.
+  Keep that folder beside the HTML when you move it into your portfolio.
+
+    assets/images/autopark-hero-dashboard.png      Hero (desktop)  admin web dashboard
+    assets/images/autopark-mobile-map.png          Hero (phone)    mobile map with a parking preview card
+    assets/images/autopark-admin-map.png           Gallery 1       admin parking map (web)
+    assets/images/autopark-spot-picker.png         Gallery 2       mobile spot picker
+    assets/images/autopark-technician-streets.png  Gallery 3       technician street-parking list (mobile)
+
+  Optional screenshots still worth taking (not in the project yet):
+    - assets/images/autopark-booking-confirmed.png  Mobile: "Réservation confirmée" success dialog
+    - assets/images/autopark-technician-fine.png    Mobile: technician issuing a fine on a street spot
+    - assets/images/autopark-hero-composite.png     One polished desktop + phone mockup for the hero
+-->
+
+<header class="hero">
+  <div class="container hero-grid">
+    <div>
+      <span class="eyebrow">Case study · Full-stack · Web + Mobile</span>
+      <h1>AutoPark</h1>
+      <p class="tagline">Smart parking for Laâyoune — find a spot on the map, reserve it in seconds.</p>
+
+      <ul class="badges" aria-label="Tech stack">
+        <li class="badge">Flutter</li>
+        <li class="badge">React</li>
+        <li class="badge">Node.js</li>
+        <li class="badge">Express</li>
+        <li class="badge">MongoDB</li>
+        <li class="badge">JWT</li>
+        <li class="badge">OpenStreetMap</li>
+      </ul>
+
+      <div class="actions">
+        <!-- TODO: replace "#" with your deployed demo URL (there's no public deployment yet) -->
+        <a class="btn btn-primary" href="#">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>
+          Live demo
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/Abdellahb9/parkSmart-V2" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/></svg>
+          Source code<span class="sr-only"> (opens in a new tab)</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-media">
+      <div class="browser">
+        <div class="browser-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+        <img src="assets/images/autopark-hero-dashboard.png" width="1440" height="1236" fetchpriority="high" decoding="async"
+             alt="AutoPark admin dashboard showing total revenue, reservation counts, partner car parks, the best and worst performing lots, and charts of revenue per month and reservations per day.">
+      </div>
+      <div class="phone">
+        <img src="assets/images/autopark-mobile-map.png" width="440" height="980" decoding="async"
+             alt="AutoPark mobile app: an OpenStreetMap view of Laâyoune with blue car-park pins and gold street-parking pins, and a preview card for Parking Centre Ville showing 20 of 20 spots free at 10 MAD per hour with a Reserve button.">
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- 2. Overview -->
+  <section class="section" id="overview" aria-labelledby="overview-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Overview</span>
+        <h2 id="overview-title">One platform for drivers, lot owners and the city</h2>
+      </div>
+
+      <div class="prose">
+        <p>AutoPark is a parking-management platform built for Laâyoune, Morocco. Drivers open a mobile app, see every car park and public-street parking zone on a live map, pick an exact spot and reserve it — while lot owners, city technicians and administrators each get their own tools on top of the same data.</p>
+        <p>I built it because finding parking in the city centre is still guesswork: drivers circle the block, owners have no visibility on occupancy or revenue, and street parking is hard to enforce. I wanted to solve that end to end — not a single screen, but a real system with multiple user roles, business rules and analytics.</p>
+        <p>The result is three apps sharing one API: a Flutter app for drivers and technicians, a React portal for administrators and owners, and a Node.js/Express backend on MongoDB. The interface is in French, prices are in Moroccan dirhams (MAD), and the maps run on OpenStreetMap.</p>
+      </div>
+
+      <dl class="facts">
+        <div class="fact"><dt>Apps sharing one API</dt><dd>3</dd></div>
+        <div class="fact"><dt>User roles</dt><dd>4</dd></div>
+        <div class="fact"><dt>REST endpoints</dt><dd>30+</dd></div>
+        <div class="fact"><dt>Data models</dt><dd>7</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 3. Key features -->
+  <section class="section" id="features" aria-labelledby="features-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Key features</span>
+        <h2 id="features-title">What it does</h2>
+      </div>
+
+      <div class="grid features">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg></div>
+          <h3>Live parking map</h3>
+          <p>Every car park is plotted on OpenStreetMap: <span class="dot dot-blue" aria-hidden="true"></span>blue pins for private lots and <span class="dot dot-gold" aria-hidden="true"></span>gold pins for public-street parking. Tap a pin for free spots, hourly price and a one-tap Reserve button.</p>
+        </article>
+
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18M9 15l2 2 4-4"/></svg></div>
+          <h3>Spot-level booking</h3>
+          <p>Drivers pick an exact spot from a colour-coded grid. The API reserves it atomically, so a spot can’t be booked twice. Stays are billed per started hour, a countdown ring tracks the active booking, and cancelling costs 20%.</p>
+        </article>
+
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 20a6.5 6.5 0 0 0-3-5.5"/></svg></div>
+          <h3>Four roles, two apps</h3>
+          <p>Drivers and technicians use the Flutter app; admins and lot owners use the React portal. JWT auth and a role-guard middleware protect the API, mirrored by role-based redirects on both clients.</p>
+        </article>
+
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 21h18M6 17v-6M11 17V6M16 17v-4M21 17V9"/></svg></div>
+          <h3>Analytics dashboards</h3>
+          <p>MongoDB aggregation pipelines compute revenue per month, bookings by weekday, peak hours, occupancy and the best and worst lots — charted with Recharts for admins and owners.</p>
+        </article>
+
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="8" width="18" height="5" rx="1"/><path d="M5 13v8h14v-8M12 8v13M12 8S10.5 3 8 3a2.5 2.5 0 0 0 0 5h4M12 8s1.5-5 4-5a2.5 2.5 0 0 1 0 5h-4"/></svg></div>
+          <h3>Loyalty &amp; rewards</h3>
+          <p>Each completed stay adds to a per-driver, per-lot counter. Rewards such as a free booking, a car wash or a shopping voucher unlock at set thresholds, with progress bars in the driver’s profile.</p>
+        </article>
+
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></div>
+          <h3>Enforcement &amp; complaints</h3>
+          <p>Technicians review public-street spots alongside their active bookings and issue fines by licence plate. Owners see stays that overran their end time, and driver complaints are tracked through to resolution.</p>
+        </article>
+      </div>
+
+      <h3 class="subhead">Screens</h3>
+      <div class="gallery">
+        <figure class="shot">
+          <a href="assets/images/autopark-admin-map.png">
+            <span class="sr-only">Open full-size screenshot: </span>
+            <div class="shot-frame">
+              <img src="assets/images/autopark-admin-map.png" width="1440" height="960" loading="lazy" decoding="async"
+                   alt="Admin web portal map page: an OpenStreetMap view of Laâyoune with three blue pins for private car parks and two gold pins for public-street parking zones.">
+            </div>
+          </a>
+          <figcaption><strong>Admin · Parking map</strong>Leaflet + OpenStreetMap. Pin colour shows the parking type.</figcaption>
+        </figure>
+
+        <figure class="shot">
+          <a href="assets/images/autopark-spot-picker.png">
+            <span class="sr-only">Open full-size screenshot: </span>
+            <div class="shot-frame is-phone">
+              <img src="assets/images/autopark-spot-picker.png" width="440" height="980" loading="lazy" decoding="async"
+                   alt="Mobile spot picker for Parking Centre Ville: a grid of 20 numbered spots shown in green, with a legend for available, occupied and reserved.">
+            </div>
+          </a>
+          <figcaption><strong>Mobile · Spot picker</strong>Drivers choose an exact spot; colours reflect live availability.</figcaption>
+        </figure>
+
+        <figure class="shot">
+          <a href="assets/images/autopark-technician-streets.png">
+            <span class="sr-only">Open full-size screenshot: </span>
+            <div class="shot-frame is-phone">
+              <img src="assets/images/autopark-technician-streets.png" width="440" height="980" loading="lazy" decoding="async"
+                   alt="Technician view in the mobile app titled Parkings voie publique, listing two public-street zones: Rue Al Kabir with 15 of 15 spots free and Boulevard Hassan II with 19 of 20 spots free.">
+            </div>
+          </a>
+          <figcaption><strong>Technician · Street parking</strong>Public-street zones to patrol, with live availability and fines per spot.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Tech stack -->
+  <section class="section" id="stack" aria-labelledby="stack-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Tech stack</span>
+        <h2 id="stack-title">Built with</h2>
+      </div>
+
+      <div class="grid stack">
+        <article class="card stack-card">
+          <h3><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span>Frontend</h3>
+          <p>Two clients for four roles.</p>
+          <h4>Web portal</h4>
+          <ul class="chips">
+            <li>React 19</li><li>Vite 8</li><li>React Router 7</li><li>Zustand</li>
+            <li>Axios</li><li>Leaflet</li><li>Recharts</li><li>Tailwind CSS 4</li>
+          </ul>
+          <h4>Mobile app</h4>
+          <ul class="chips">
+            <li>Flutter 3.38</li><li>Dart</li><li>go_router</li><li>Provider</li>
+            <li>flutter_map</li><li>shared_preferences</li><li>http</li>
+          </ul>
+        </article>
+
+        <article class="card stack-card">
+          <h3><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6M4 11.5v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></span>Backend</h3>
+          <p>REST API, auth and business rules.</p>
+          <ul class="chips">
+            <li>Node.js</li><li>Express 4</li><li>MongoDB</li><li>Mongoose 8</li>
+            <li>JSON Web Tokens</li><li>bcryptjs</li><li>express-validator</li>
+            <li>Multer</li><li>CORS</li><li>dotenv</li>
+          </ul>
+        </article>
+
+        <article class="card stack-card">
+          <h3><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L3 17.8V21h3.2l6.3-6.3a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.3-.7-.7-2.3z"/></svg></span>Tools</h3>
+          <p>Development and testing.</p>
+          <ul class="chips">
+            <li>Git &amp; GitHub</li><li>Vite dev proxy</li><li>Android Emulator</li>
+            <li>OpenStreetMap tiles</li><li>Seed script</li><li>flutter_lints</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Challenges & what I learned -->
+  <section class="section" id="challenges" aria-labelledby="challenges-title">
+    <div class="container">
+      <div class="section-head">
+        <span class="eyebrow">Challenges &amp; lessons</span>
+        <h2 id="challenges-title">What went wrong, and what I learned</h2>
+      </div>
+
+      <div class="grid challenges">
+        <article class="card">
+          <h3>Reservations failed on a standalone database</h3>
+          <p>The booking flow relied on multi-document MongoDB transactions, which only work on a replica set. On a standard single-node MongoDB, every reservation returned a server error. I redesigned the write around one atomic conditional update plus a compensating rollback if the booking insert fails.</p>
+          <p class="lesson"><b>What I learned</b>Atomicity doesn’t always require transactions — check what your infrastructure actually guarantees before depending on a feature.</p>
+        </article>
+
+        <article class="card">
+          <h3>A query that allowed double-booking</h3>
+          <p>Fixing the first bug exposed a hidden one. Filtering <code>spots.spotNumber</code> and <code>spots.status</code> separately let MongoDB match two different array elements, so a reserved spot could be booked again — and the wrong spot got flagged. <code>$elemMatch</code> forces both conditions onto the same spot.</p>
+          <p class="lesson"><b>What I learned</b>Test edge cases with real requests against the running API, and expect one bug to be hiding another.</p>
+        </article>
+
+        <article class="card">
+          <h3>One API, two very different clients</h3>
+          <p>React and Flutter handle state, navigation and token storage in completely different ways. Keeping sessions and roles consistent meant defining the API contract first, then mapping it to Zustand and Axios interceptors on the web and Provider and go_router redirects on mobile.</p>
+          <p class="lesson"><b>What I learned</b>A clear API contract and role model up front make a multi-client product far easier to evolve.</p>
+        </article>
+
+        <article class="card">
+          <h3>Maps and mobile lifecycle gotchas</h3>
+          <p>I moved both clients to OpenStreetMap to avoid API keys and billing, and fixed Flutter crashes caused by calling <code>setState</code> after a widget was disposed and by navigating from inside a dialog.</p>
+          <p class="lesson"><b>What I learned</b>Guard every async UI update with a <code>mounted</code> check, and prefer open data for location features when you can.</p>
+        </article>
+      </div>
+
+      <div class="next">
+        <p><strong>Next steps:</strong> automated integration tests for the booking edge cases, online payments, push notifications for overstays, and a public deployment.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <p>AutoPark · Smart parking for Laâyoune · 2026</p>
+    <a href="https://github.com/Abdellahb9/parkSmart-V2" target="_blank" rel="noopener noreferrer">View the source on GitHub<span class="sr-only"> (opens in a new tab)</span></a>
+  </div>
+</footer>
+
+</body>
+</html>
